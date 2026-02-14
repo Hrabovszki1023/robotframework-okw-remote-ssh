@@ -10,9 +10,10 @@ authors = [{ name = "Zoltan Hrabovszki" }]
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "robotframework>=6.0",
-    "paramiko>=3.0",
-    "PyYAML>=6.0"
+  "robotframework>=6.0",
+  "paramiko>=3.0",
+  "PyYAML>=6.0",
+  "okw-contract-utils>=0.1.0"
 ]
 
 [tool.setuptools.packages.find]

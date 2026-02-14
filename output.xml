@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.1 (Python 3.11.7 on win32)" generated="2026-02-14T12:27:31.649024" rpa="false" schemaversion="5">
+<suite id="s1" name="Contract" source="D:\work\okw\robotframework\robotframework-okw-remote-ssh\tests\contract">
+<suite id="s1-s1" name="Contract" source="D:\work\okw\robotframework\robotframework-okw-remote-ssh\tests\contract\contract.robot">
+<test id="s1-s1-t1" name="Value Expansion Should Work" line="5">
+<kw name="Open Remote Session" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<arg>dummy</arg>
+<status status="PASS" start="2026-02-14T12:27:31.683952" elapsed="0.000000"/>
+</kw>
+<kw name="Set Remote" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<arg>abc</arg>
+<doc>Executes a command (synchronously) and stores the structured response in last_response.
+Applies $MEM{KEY} expansion before execution.</doc>
+<status status="PASS" start="2026-02-14T12:27:31.683952" elapsed="0.000000"/>
+</kw>
+<kw name="Memorize Remote Response Field" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<arg>stdout</arg>
+<arg>MYKEY</arg>
+<status status="PASS" start="2026-02-14T12:27:31.683952" elapsed="0.000000"/>
+</kw>
+<kw name="Set Remote" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<arg>prefix-$MEM{MYKEY}-suffix</arg>
+<doc>Executes a command (synchronously) and stores the structured response in last_response.
+Applies $MEM{KEY} expansion before execution.</doc>
+<status status="PASS" start="2026-02-14T12:27:31.683952" elapsed="0.000000"/>
+</kw>
+<kw name="Verify Remote Response" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<arg>prefix-abc-suffix</arg>
+<status status="PASS" start="2026-02-14T12:27:31.683952" elapsed="0.001309"/>
+</kw>
+<kw name="Close Remote Session" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<status status="PASS" start="2026-02-14T12:27:31.685261" elapsed="0.000000"/>
+</kw>
+<status status="PASS" start="2026-02-14T12:27:31.682953" elapsed="0.002308"/>
+</test>
+<test id="s1-s1-t2" name="Value Expansion Should Fail On Missing Key" line="13">
+<kw name="Open Remote Session" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<arg>dummy</arg>
+<status status="PASS" start="2026-02-14T12:27:31.685261" elapsed="0.000000"/>
+</kw>
+<kw name="Run Keyword And Expect Error" owner="BuiltIn">
+<kw name="Set Remote" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<msg time="2026-02-14T12:27:31.686641" level="FAIL">OkwConfigError: Memorized key not found: UNKNOWN</msg>
+<arg>r1</arg>
+<arg>test-$MEM{UNKNOWN}</arg>
+<doc>Executes a command (synchronously) and stores the structured response in last_response.
+Applies $MEM{KEY} expansion before execution.</doc>
+<status status="FAIL" start="2026-02-14T12:27:31.686641" elapsed="0.000000">OkwConfigError: Memorized key not found: UNKNOWN</status>
+</kw>
+<arg>*</arg>
+<arg>Set Remote</arg>
+<arg>r1</arg>
+<arg>test-$MEM{UNKNOWN}</arg>
+<doc>Runs the keyword and checks that the expected error occurred.</doc>
+<status status="PASS" start="2026-02-14T12:27:31.685261" elapsed="0.001380"/>
+</kw>
+<kw name="Close Remote Session" owner="robotframework_okw_remote_ssh.RemoteSshLibrary">
+<arg>r1</arg>
+<status status="PASS" start="2026-02-14T12:27:31.687641" elapsed="0.000000"/>
+</kw>
+<status status="PASS" start="2026-02-14T12:27:31.685261" elapsed="0.002380"/>
+</test>
+<status status="PASS" start="2026-02-14T12:27:31.673404" elapsed="0.014237"/>
+</suite>
+<status status="PASS" start="2026-02-14T12:27:31.650024" elapsed="0.037617"/>
+</suite>
+<statistics>
+<total>
+<stat pass="2" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="Contract" id="s1" pass="2" fail="0" skip="0">Contract</stat>
+<stat name="Contract" id="s1-s1" pass="2" fail="0" skip="0">Contract.Contract</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
