@@ -91,6 +91,12 @@ Verify Stderr With Empty String Should Work
     Verify Remote Stderr   r1    ${EMPTY}
     Close Remote Session   r1
 
+Verify Response Should Work
+    Open Remote Session    r1    dummy
+    Set Remote             r1    hello world
+    Verify Remote Response    r1    hello world
+    Close Remote Session   r1
+
 Verify Response WCM Should Work
     Open Remote Session    r1    dummy
     Set Remote             r1    hello world
@@ -101,6 +107,20 @@ Verify Response REGX Should Work
     Open Remote Session    r1    dummy
     Set Remote             r1    hello world 42
     Verify Remote Response REGX    r1    world\\s+\\d+
+    Close Remote Session   r1
+
+Verify Stderr WCM Should Work
+    Open Remote Session    r1    dummy
+    Set Remote             r1    abc
+    # Stub stderr is empty -> WCM match against empty string
+    Verify Remote Stderr WCM    r1    ${EMPTY}
+    Close Remote Session   r1
+
+Verify Stderr REGX Should Work
+    Open Remote Session    r1    dummy
+    Set Remote             r1    abc
+    # Stub stderr is empty -> REGX match against ^$
+    Verify Remote Stderr REGX    r1    ^$
     Close Remote Session   r1
 
 Set Remote And Continue Should Not Fail On Nonzero Exit
