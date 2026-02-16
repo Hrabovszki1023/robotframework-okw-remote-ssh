@@ -16,10 +16,55 @@ except Exception:
 
 @library(scope="GLOBAL")
 class RemoteSshLibrary:
+    """Standalone Robot Framework library for deterministic remote interaction via SSH.
+
+    = Overview =
+
+    This library provides session-based remote command execution and structured
+    verification keywords. It follows the OKW contract-first design: action
+    keywords (``Set Remote``) write to ``last_response``, verification keywords
+    read from it.
+
+    = Session Management =
+
+    Multiple sessions can be opened concurrently, each referenced by an abstract
+    session name (e.g. ``r1``). Connection details are loaded from YAML files
+    in the configured ``config_dir`` directory (default: ``remotes/``).
+
+    = Value Expansion =
+
+    All command, expected, and expr parameters support ``$MEM{KEY}`` expansion.
+    Missing keys cause immediate FAIL.
+
+    = OKW Global Tokens =
+
+    | *Token*    | *Supported* | *Behavior*                                           |
+    | $IGNORE    | Yes         | Skips execution or verification (PASS, no SSH call)  |
+    | $EMPTY     | Yes         | Asserts that the checked field is empty               |
+    | $DELETE    | No          | Not implemented in this library                      |
+
+    = Token Evaluation Order =
+
+    1. Robot variable expansion (e.g. ``${IGNORE}`` -> ``$IGNORE``)
+    2. OKW value expansion (``$MEM{KEY}`` -> stored value)
+    3. Token parsing (``$IGNORE``, ``$EMPTY``)
+    4. Keyword execution / verification
+
+    = Secrets =
+
+    Passwords are never stored in the repository. They are resolved from a local
+    secrets file (default: ``~/.okw/secrets.yaml``). Remote YAML configs reference
+    secrets via ``auth.secret_id``.
+
+    = Examples =
+
+    | Open Remote Session    | r1    | myserver        |
+    | Set Remote             | r1    | whoami          |
+    | Verify Remote Response | r1    | expecteduser    |
+    | Close Remote Session   | r1    |                 |
     """
-    Standalone Robot Framework library for deterministic remote interaction.
-    Contract-first: Action (Set Remote) writes last_response, Verify reads it.
-    """
+
+    ROBOT_LIBRARY_DOC_FORMAT = 'ROBOT'
 
     def __init__(self, config_dir: str = "remotes", backend: str = "stub", secrets_path: str | None = None):
         self._sessions = {}
@@ -157,6 +202,24 @@ class RemoteSshLibrary:
     # -------------------------
     @keyword("Open Remote Session")
     def open_remote_session(self, session_name: str, config_ref: str):
+        """Opens a named SSH session using a remote definition file.
+
+        Arguments:
+        - ``session_name``: Abstract session identifier (e.g. ``r1``).
+        - ``config_ref``: Base name of the YAML config file in the config directory
+          (without ``.yaml`` extension). Resolved as ``<config_dir>/<config_ref>.yaml``.
+
+        Behavior:
+        - Loads connection details from the YAML file.
+        - Resolves the password from the local secrets file via ``auth.secret_id``.
+        - Establishes the SSH connection (paramiko backend) or creates a stub session.
+        - Fails if the session name already exists, the config file is missing,
+          or required fields (``host``, ``username``) are absent.
+
+        Examples:
+        | Open Remote Session | r1 | myserver  |
+        | Open Remote Session | r2 | localhost |
+        """
         if session_name in self._sessions:
             raise ValueError(f"Session '{session_name}' already exists.")
 
@@ -176,6 +239,21 @@ class RemoteSshLibrary:
 
     @keyword("Close Remote Session")
     def close_remote_session(self, session_name: str):
+        """Closes an open SSH session and releases all resources.
+
+        Arguments:
+        - ``session_name``: The session identifier to close (e.g. ``r1``).
+
+        Behavior:
+        - Closes the underlying SSH connection (if paramiko backend).
+        - Removes the session from the internal session registry.
+        - Fails if the session does not exist.
+
+        Examples:
+        | Open Remote Session  | r1 | myserver |
+        | Set Remote           | r1 | whoami   |
+        | Close Remote Session | r1 |          |
+        """
         s = self._ensure_session(session_name)
         client = s.get("client")
         if client is not None:
@@ -190,11 +268,48 @@ class RemoteSshLibrary:
     # -------------------------
     @keyword("Set Remote")
     def set_remote(self, session_name: str, command: str):
-        return self._set_remote(session_name, command, ignore_exit_code=False)
+        """Executes a command on the remote host. Fails on nonzero exit code.
 
+        Arguments:
+        - ``session_name``: The session to execute on (e.g. ``r1``).
+        - ``command``: The shell command to execute. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` placeholders in the command.
+        - If the expanded command is ``$IGNORE``: no SSH call is made,
+          ``last_response`` remains unchanged, keyword returns PASS.
+        - Executes the command via SSH (or stub backend).
+        - Normalizes stdout/stderr (``\\r\\n`` -> ``\\n``, rstrip).
+        - Stores the result in ``last_response`` (command, stdout, stderr,
+          exit_code, duration_ms).
+        - Logs all response fields in a single keyword step (ASR logging).
+        - Raises ``AssertionError`` if ``exit_code != 0``.
+
+        Examples:
+        | Set Remote | r1 | whoami                 |
+        | Set Remote | r1 | echo $MEM{MYVAR}       |
+        | Set Remote | r1 | ${IGNORE}              |
+        """
+        return self._set_remote(session_name, command, ignore_exit_code=False)
 
     @keyword("Set Remote And Continue")
     def set_remote_and_continue(self, session_name: str, command: str):
+        """Executes a command on the remote host. Does *not* fail on nonzero exit code.
+
+        Arguments:
+        - ``session_name``: The session to execute on (e.g. ``r1``).
+        - ``command``: The shell command to execute. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Same as ``Set Remote``, but never raises on nonzero ``exit_code``.
+        - Useful for commands that are expected to fail (e.g. testing error paths).
+        - ``$IGNORE`` token handling is identical to ``Set Remote``.
+
+        Examples:
+        | Set Remote And Continue | r1 | exit 1          |
+        | Verify Remote Exit Code | r1 | 1               |
+        | Set Remote And Continue | r1 | invalid_command |
+        """
         return self._set_remote(session_name, command, ignore_exit_code=True)
 
 
@@ -268,6 +383,21 @@ class RemoteSshLibrary:
     # -------------------------
     @keyword("Verify Remote Response")
     def verify_remote_response(self, session_name: str, expected: str):
+        """Verifies that stdout of the last command matches the expected value (EXACT match).
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``expected``: The expected stdout value. Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+        - ``$EMPTY``: Asserts that stdout is empty.
+
+        Examples:
+        | Set Remote             | r1 | echo hello |
+        | Verify Remote Response | r1 | hello      |
+        | Verify Remote Response | r1 | ${IGNORE}  |
+        """
         actual = str(self._get_response_field(session_name, "stdout") or "")
         expected_expanded = expand_mem(expected, self._store)
         if self._check_ignore(expected_expanded):
@@ -277,6 +407,22 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Response WCM")
     def verify_remote_response_wcm(self, session_name: str, pattern: str):
+        """Verifies that stdout of the last command contains the pattern (wildcard/contains match).
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``pattern``: The wildcard pattern to match against stdout.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+        - ``$EMPTY``: Asserts that stdout is empty.
+
+        Examples:
+        | Set Remote                 | r1 | echo hello world |
+        | Verify Remote Response WCM | r1 | world            |
+        | Verify Remote Response WCM | r1 | hello*           |
+        """
         actual = str(self._get_response_field(session_name, "stdout") or "")
         pattern_expanded = expand_mem(pattern, self._store)
         if self._check_ignore(pattern_expanded):
@@ -286,6 +432,22 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Response REGX")
     def verify_remote_response_regx(self, session_name: str, regex: str):
+        """Verifies that stdout of the last command matches a regular expression.
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``regex``: The regular expression pattern to match against stdout.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+        - ``$EMPTY``: Asserts that stdout is empty.
+
+        Examples:
+        | Set Remote                  | r1 | echo hello 42       |
+        | Verify Remote Response REGX | r1 | hello\\\\s+\\\\d+   |
+        | Verify Remote Response REGX | r1 | ^hello.*$            |
+        """
         actual = str(self._get_response_field(session_name, "stdout") or "")
         regex_expanded = expand_mem(regex, self._store)
         if self._check_ignore(regex_expanded):
@@ -295,6 +457,26 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Stderr")
     def verify_remote_stderr(self, session_name: str, expected: str = "$EMPTY"):
+        """Verifies that stderr of the last command matches the expected value (EXACT match).
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``expected``: The expected stderr value (default: ``$EMPTY``).
+          Supports ``$MEM{KEY}`` expansion.
+
+        Default semantics:
+        - When called without ``expected``, asserts that stderr is empty.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+        - ``$EMPTY``: Asserts that stderr is empty.
+
+        Examples:
+        | Set Remote            | r1 | echo hello       |
+        | Verify Remote Stderr  | r1 |                   |
+        | Verify Remote Stderr  | r1 | expected error    |
+        | Verify Remote Stderr  | r1 | ${IGNORE}         |
+        """
         actual = str(self._get_response_field(session_name, "stderr") or "")
         expected_expanded = expand_mem(expected, self._store)
         if self._check_ignore(expected_expanded):
@@ -304,6 +486,25 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Stderr WCM")
     def verify_remote_stderr_wcm(self, session_name: str, pattern: str = "$EMPTY"):
+        """Verifies that stderr of the last command contains the pattern (wildcard/contains match).
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``pattern``: The wildcard pattern to match against stderr (default: ``$EMPTY``).
+          Supports ``$MEM{KEY}`` expansion.
+
+        Default semantics:
+        - When called without ``pattern``, asserts that stderr is empty.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+        - ``$EMPTY``: Asserts that stderr is empty.
+
+        Examples:
+        | Set Remote                | r1 | some_command    |
+        | Verify Remote Stderr WCM  | r1 |                 |
+        | Verify Remote Stderr WCM  | r1 | *warning*       |
+        """
         actual = str(self._get_response_field(session_name, "stderr") or "")
         pattern_expanded = expand_mem(pattern, self._store)
         if self._check_ignore(pattern_expanded):
@@ -313,6 +514,25 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Stderr REGX")
     def verify_remote_stderr_regx(self, session_name: str, regex: str = "$EMPTY"):
+        """Verifies that stderr of the last command matches a regular expression.
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``regex``: The regular expression pattern to match against stderr
+          (default: ``$EMPTY``). Supports ``$MEM{KEY}`` expansion.
+
+        Default semantics:
+        - When called without ``regex``, asserts that stderr is empty.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+        - ``$EMPTY``: Asserts that stderr is empty.
+
+        Examples:
+        | Set Remote                 | r1 | some_command        |
+        | Verify Remote Stderr REGX  | r1 |                     |
+        | Verify Remote Stderr REGX  | r1 | error:\\\\s+\\\\d+  |
+        """
         actual = str(self._get_response_field(session_name, "stderr") or "")
         regex_expanded = expand_mem(regex, self._store)
         if self._check_ignore(regex_expanded):
@@ -322,6 +542,24 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Exit Code")
     def verify_remote_exit_code(self, session_name: str, expected_exit_code: str):
+        """Verifies the exit code of the last command (numeric exact compare).
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``expected_exit_code``: The expected exit code as string or integer.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+
+        Examples:
+        | Set Remote              | r1 | echo hello |
+        | Verify Remote Exit Code | r1 | 0          |
+        |                         |    |            |
+        | Set Remote And Continue | r1 | exit 42    |
+        | Verify Remote Exit Code | r1 | 42         |
+        | Verify Remote Exit Code | r1 | ${IGNORE}  |
+        """
         expanded = expand_mem(str(expected_exit_code), self._store)
         if self._check_ignore(expanded):
             return
@@ -347,6 +585,30 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Duration")
     def verify_remote_duration(self, session_name: str, expr: str):
+        """Verifies the execution duration (in milliseconds) of the last command.
+
+        Arguments:
+        - ``session_name``: The session to verify (e.g. ``r1``).
+        - ``expr``: A comparison expression or range. Supports ``$MEM{KEY}`` expansion.
+
+        Supported expressions:
+        | *Syntax*  | *Meaning*                           |
+        | >=100     | Duration is at least 100 ms         |
+        | <=5000    | Duration is at most 5000 ms         |
+        | >0        | Duration is greater than 0 ms       |
+        | <10000    | Duration is less than 10000 ms      |
+        | ==500     | Duration is exactly 500 ms          |
+        | 100..5000 | Duration is between 100 and 5000 ms |
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+
+        Examples:
+        | Set Remote              | r1 | sleep 1       |
+        | Verify Remote Duration  | r1 | >=1000        |
+        | Verify Remote Duration  | r1 | 500..3000     |
+        | Verify Remote Duration  | r1 | ${IGNORE}     |
+        """
         expanded = expand_mem(expr, self._store)
         if self._check_ignore(expanded):
             return
@@ -376,6 +638,27 @@ class RemoteSshLibrary:
     # -------------------------
     @keyword("Memorize Remote Response Field")
     def memorize_remote_response_field(self, session_name: str, field: str, key: str):
+        """Stores a field from the last response into the internal value store for later ``$MEM{KEY}`` expansion.
+
+        Arguments:
+        - ``session_name``: The session to read from (e.g. ``r1``).
+        - ``field``: The response field to store. One of: ``command``, ``stdout``,
+          ``stderr``, ``exit_code``, ``duration_ms``.
+        - ``key``: The key name for ``$MEM{KEY}`` references in subsequent keywords.
+
+        Behavior:
+        - Reads the specified field from ``last_response``.
+        - Stores the value in the internal store under the given key.
+        - Fails if no ``last_response`` exists or the field name is unknown.
+
+        Examples:
+        | Set Remote                     | r1 | hostname     |
+        | Memorize Remote Response Field | r1 | stdout       | HOST   |
+        | Set Remote                     | r1 | echo $MEM{HOST} |
+        |                                |    |              |        |
+        | Memorize Remote Response Field | r1 | exit_code    | RC     |
+        | Verify Remote Exit Code        | r1 | $MEM{RC}     |
+        """
         resp = self._ensure_last_response(session_name)
         if field not in resp:
             raise ValueError(f"Unknown response field: {field}")
