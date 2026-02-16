@@ -216,6 +216,34 @@ class RemoteSshLibrary:
         - Fails if the session name already exists, the config file is missing,
           or required fields (``host``, ``username``) are absent.
 
+        Remote definition template (``remotes/<config_ref>.yaml``):
+        | *Attribute*       | *Required* | *Default* | *Description*                          |
+        | host              | Yes        |           | Hostname or IP address                 |
+        | port              | No         | 22        | SSH port                               |
+        | username          | Yes        |           | SSH username                           |
+        | timeout           | No         | 10        | Connection and command timeout (sec)   |
+        | encoding          | No         | utf-8     | Output encoding                        |
+        | auth.type         | Yes        | password  | Authentication type (MVP: password)    |
+        | auth.secret_id    | Yes        |           | Reference to ``~/.okw/secrets.yaml``   |
+
+        YAML example (``remotes/myserver.yaml``):
+        | host: "192.168.1.100"
+        | port: 22
+        | username: "testuser"
+        | timeout: 10
+        | encoding: "utf-8"
+        | auth:
+        |   type: password
+        |   secret_id: "myserver/testuser"
+
+        The password is resolved from the local secrets file (``~/.okw/secrets.yaml``):
+        | secrets:
+        |   myserver/testuser:
+        |     password: "your_password_here"
+
+        *Note:* The ``password`` field must never appear in the remote YAML file itself.
+        Passwords are always resolved from the secrets file outside the repository.
+
         Examples:
         | Open Remote Session | r1 | myserver  |
         | Open Remote Session | r2 | localhost |
