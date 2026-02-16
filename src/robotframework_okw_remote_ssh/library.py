@@ -244,17 +244,16 @@ class RemoteSshLibrary:
         *Note:* The ``password`` field must never appear in the remote YAML file itself.
         Passwords are always resolved from the secrets file outside the repository.
 
-        Example (`open_session.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           | backend=paramiko                                   |
-        |           |                                                    |
-        | =Test Cases=  |           |            |                       |
-        | Connect To Build Server   |            |                       |
-        |     Open Remote Session   | r1         | buildserver01          |
-        |     Set Remote            | r1         | whoami                 |
-        |     Verify Remote Response | r1        | jenkins                |
-        |     Close Remote Session  | r1         |                        |
+        Example (``open_session.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Connect To Build Server
+        |     Open Remote Session     r1    buildserver01
+        |     Set Remote              r1    whoami
+        |     Verify Remote Response  r1    jenkins
+        |     Close Remote Session    r1
         """
         if session_name in self._sessions:
             raise ValueError(f"Session '{session_name}' already exists.")
@@ -285,16 +284,16 @@ class RemoteSshLibrary:
         - Removes the session from the internal session registry.
         - Fails if the session does not exist.
 
-        Example (`close_session.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |            |            |                      |
-        | Session Lifecycle          |            |                      |
-        |     Open Remote Session    | r1         | myserver             |
-        |     Set Remote             | r1         | uptime               |
-        |     Verify Remote Response | r1         | up                   |
-        |     Close Remote Session   | r1         |                      |
+        Example (``close_session.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Session Lifecycle
+        |     Open Remote Session     r1    myserver
+        |     Set Remote              r1    uptime
+        |     Verify Remote Response  r1    up
+        |     Close Remote Session    r1
         """
         s = self._ensure_session(session_name)
         client = s.get("client")
@@ -327,27 +326,27 @@ class RemoteSshLibrary:
         - Logs all response fields in a single keyword step (ASR logging).
         - Raises ``AssertionError`` if ``exit_code != 0``.
 
-        Example (`set_remote.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Variable= | =Value=                                          |
-        | ${IGNORE}  | $IGNORE                                          |
-        |           |                                                    |
-        | =Test Cases=  |           |                |                   |
-        | Execute Command And Verify |               |                   |
-        |     Open Remote Session    | r1            | myserver          |
-        |     Set Remote             | r1            | whoami            |
-        |     Verify Remote Response | r1            | testuser          |
-        |     Close Remote Session   | r1            |                   |
-        |           |                |                |                   |
-        | Skip With Ignore Token     |               |                   |
-        |     Open Remote Session    | r1            | myserver          |
-        |     Set Remote             | r1            | echo first        |
-        |     Set Remote             | r1            | ${IGNORE}         |
-        |     # last_response is still "echo first"  |                   |
-        |     Verify Remote Response | r1            | first             |
-        |     Close Remote Session   | r1            |                   |
+        Example (``set_remote.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Variables ***
+        | ${IGNORE}    $IGNORE
+        |
+        | *** Test Cases ***
+        | Execute Command And Verify
+        |     Open Remote Session     r1    myserver
+        |     Set Remote              r1    whoami
+        |     Verify Remote Response  r1    testuser
+        |     Close Remote Session    r1
+        |
+        | Skip With Ignore Token
+        |     Open Remote Session     r1    myserver
+        |     Set Remote              r1    echo first
+        |     Set Remote              r1    ${IGNORE}
+        |     # last_response is still "echo first"
+        |     Verify Remote Response  r1    first
+        |     Close Remote Session    r1
         """
         return self._set_remote(session_name, command, ignore_exit_code=False)
 
@@ -364,17 +363,17 @@ class RemoteSshLibrary:
         - Useful for commands that are expected to fail (e.g. testing error paths).
         - ``$IGNORE`` token handling is identical to ``Set Remote``.
 
-        Example (`set_remote_and_continue.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                    |               |
-        | Tolerate Nonzero Exit Code |                   |               |
-        |     Open Remote Session    | r1               | myserver       |
-        |     Set Remote And Continue | r1              | exit 1         |
-        |     Verify Remote Exit Code | r1              | 1              |
-        |     Verify Remote Stderr    | r1              |                |
-        |     Close Remote Session    | r1              |                |
+        Example (``set_remote_and_continue.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Tolerate Nonzero Exit Code
+        |     Open Remote Session      r1    myserver
+        |     Set Remote And Continue   r1    exit 1
+        |     Verify Remote Exit Code   r1    1
+        |     Verify Remote Stderr      r1
+        |     Close Remote Session      r1
         """
         return self._set_remote(session_name, command, ignore_exit_code=True)
 
@@ -459,16 +458,16 @@ class RemoteSshLibrary:
         - ``$IGNORE``: Skips verification (PASS).
         - ``$EMPTY``: Asserts that stdout is empty.
 
-        Example (`verify_response.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                     |              |
-        | Verify Stdout Exact Match  |                    |              |
-        |     Open Remote Session    | r1                | myserver      |
-        |     Set Remote             | r1                | hostname      |
-        |     Verify Remote Response | r1                | buildserver01 |
-        |     Close Remote Session   | r1                |               |
+        Example (``verify_response.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Verify Stdout Exact Match
+        |     Open Remote Session     r1    myserver
+        |     Set Remote              r1    hostname
+        |     Verify Remote Response  r1    buildserver01
+        |     Close Remote Session    r1
         """
         actual = str(self._get_response_field(session_name, "stdout") or "")
         expected_expanded = expand_mem(expected, self._store)
@@ -490,16 +489,16 @@ class RemoteSshLibrary:
         - ``$IGNORE``: Skips verification (PASS).
         - ``$EMPTY``: Asserts that stdout is empty.
 
-        Example (`verify_response_wcm.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                          |         |
-        | Verify Stdout Contains Substring |                   |         |
-        |     Open Remote Session          | r1               | myserver |
-        |     Set Remote                   | r1               | uname -a |
-        |     Verify Remote Response WCM   | r1               | Linux    |
-        |     Close Remote Session         | r1               |          |
+        Example (``verify_response_wcm.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Verify Stdout Contains Substring
+        |     Open Remote Session          r1    myserver
+        |     Set Remote                   r1    uname -a
+        |     Verify Remote Response WCM   r1    Linux
+        |     Close Remote Session         r1
         """
         actual = str(self._get_response_field(session_name, "stdout") or "")
         pattern_expanded = expand_mem(pattern, self._store)
@@ -521,16 +520,16 @@ class RemoteSshLibrary:
         - ``$IGNORE``: Skips verification (PASS).
         - ``$EMPTY``: Asserts that stdout is empty.
 
-        Example (`verify_response_regx.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                           |        |
-        | Verify Stdout Matches Regex |                         |        |
-        |     Open Remote Session     | r1                     | myserver |
-        |     Set Remote              | r1                     | date +%Y-%m-%d |
-        |     Verify Remote Response REGX | r1                 | ^\\d{4}-\\d{2}-\\d{2}$ |
-        |     Close Remote Session    | r1                     |         |
+        Example (``verify_response_regx.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Verify Stdout Matches Regex
+        |     Open Remote Session          r1    myserver
+        |     Set Remote                   r1    date +%Y-%m-%d
+        |     Verify Remote Response REGX  r1    ^\\d{4}-\\d{2}-\\d{2}$
+        |     Close Remote Session         r1
         """
         actual = str(self._get_response_field(session_name, "stdout") or "")
         regex_expanded = expand_mem(regex, self._store)
@@ -555,22 +554,22 @@ class RemoteSshLibrary:
         - ``$IGNORE``: Skips verification (PASS).
         - ``$EMPTY``: Asserts that stderr is empty.
 
-        Example (`verify_stderr.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                          |         |
-        | Assert No Stderr Output  |                           |         |
-        |     Open Remote Session  | r1                       | myserver |
-        |     Set Remote           | r1                       | echo ok  |
-        |     Verify Remote Stderr | r1                       |          |
-        |     Close Remote Session | r1                       |          |
-        |           |               |                          |         |
-        | Assert Stderr Contains Error Message |               |         |
-        |     Open Remote Session  | r1                       | myserver |
-        |     Set Remote And Continue | r1                    | ls /nonexistent |
-        |     Verify Remote Stderr | r1 | No such file or directory      |
-        |     Close Remote Session | r1                       |          |
+        Example (``verify_stderr.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Assert No Stderr Output
+        |     Open Remote Session     r1    myserver
+        |     Set Remote              r1    echo ok
+        |     Verify Remote Stderr    r1
+        |     Close Remote Session    r1
+        |
+        | Assert Stderr Contains Error Message
+        |     Open Remote Session     r1    myserver
+        |     Set Remote And Continue r1    ls /nonexistent
+        |     Verify Remote Stderr    r1    No such file or directory
+        |     Close Remote Session    r1
         """
         actual = str(self._get_response_field(session_name, "stderr") or "")
         expected_expanded = expand_mem(expected, self._store)
@@ -595,16 +594,16 @@ class RemoteSshLibrary:
         - ``$IGNORE``: Skips verification (PASS).
         - ``$EMPTY``: Asserts that stderr is empty.
 
-        Example (`verify_stderr_wcm.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                              |     |
-        | Stderr Contains Warning Substring |                      |     |
-        |     Open Remote Session       | r1                      | myserver |
-        |     Set Remote And Continue   | r1                      | make build |
-        |     Verify Remote Stderr WCM  | r1                      | *warning* |
-        |     Close Remote Session      | r1                      |      |
+        Example (``verify_stderr_wcm.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Stderr Contains Warning Substring
+        |     Open Remote Session       r1    myserver
+        |     Set Remote And Continue   r1    make build
+        |     Verify Remote Stderr WCM  r1    *warning*
+        |     Close Remote Session      r1
         """
         actual = str(self._get_response_field(session_name, "stderr") or "")
         pattern_expanded = expand_mem(pattern, self._store)
@@ -629,16 +628,16 @@ class RemoteSshLibrary:
         - ``$IGNORE``: Skips verification (PASS).
         - ``$EMPTY``: Asserts that stderr is empty.
 
-        Example (`verify_stderr_regx.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                              |     |
-        | Stderr Matches Error Pattern |                           |     |
-        |     Open Remote Session      | r1                       | myserver |
-        |     Set Remote And Continue  | r1                       | python3 broken.py |
-        |     Verify Remote Stderr REGX | r1                      | .*Error.* |
-        |     Close Remote Session     | r1                       |      |
+        Example (``verify_stderr_regx.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Stderr Matches Error Pattern
+        |     Open Remote Session        r1    myserver
+        |     Set Remote And Continue    r1    python3 broken.py
+        |     Verify Remote Stderr REGX  r1    .*Error.*
+        |     Close Remote Session       r1
         """
         actual = str(self._get_response_field(session_name, "stderr") or "")
         regex_expanded = expand_mem(regex, self._store)
@@ -659,22 +658,22 @@ class RemoteSshLibrary:
         Special tokens:
         - ``$IGNORE``: Skips verification (PASS).
 
-        Example (`verify_exit_code.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                          |         |
-        | Verify Successful Command |                          |         |
-        |     Open Remote Session     | r1                    | myserver |
-        |     Set Remote              | r1                    | echo ok  |
-        |     Verify Remote Exit Code | r1                    | 0        |
-        |     Close Remote Session    | r1                    |          |
-        |           |                  |                       |         |
-        | Verify Expected Failure     |                        |         |
-        |     Open Remote Session     | r1                    | myserver |
-        |     Set Remote And Continue | r1                    | exit 42  |
-        |     Verify Remote Exit Code | r1                    | 42       |
-        |     Close Remote Session    | r1                    |          |
+        Example (``verify_exit_code.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Verify Successful Command
+        |     Open Remote Session      r1    myserver
+        |     Set Remote               r1    echo ok
+        |     Verify Remote Exit Code  r1    0
+        |     Close Remote Session     r1
+        |
+        | Verify Expected Failure
+        |     Open Remote Session      r1    myserver
+        |     Set Remote And Continue  r1    exit 42
+        |     Verify Remote Exit Code  r1    42
+        |     Close Remote Session     r1
         """
         expanded = expand_mem(str(expected_exit_code), self._store)
         if self._check_ignore(expanded):
@@ -719,17 +718,17 @@ class RemoteSshLibrary:
         Special tokens:
         - ``$IGNORE``: Skips verification (PASS).
 
-        Example (`verify_duration.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                           |        |
-        | Command Completes Within Timeout |                    |        |
-        |     Open Remote Session     | r1                     | myserver |
-        |     Set Remote              | r1                     | sleep 1 |
-        |     Verify Remote Duration  | r1                     | >=1000  |
-        |     Verify Remote Duration  | r1                     | 500..3000 |
-        |     Close Remote Session    | r1                     |         |
+        Example (``verify_duration.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Command Completes Within Timeout
+        |     Open Remote Session      r1    myserver
+        |     Set Remote               r1    sleep 1
+        |     Verify Remote Duration   r1    >=1000
+        |     Verify Remote Duration   r1    500..3000
+        |     Close Remote Session     r1
         """
         expanded = expand_mem(expr, self._store)
         if self._check_ignore(expanded):
@@ -773,18 +772,18 @@ class RemoteSshLibrary:
         - Stores the value in the internal store under the given key.
         - Fails if no ``last_response`` exists or the field name is unknown.
 
-        Example (`memorize_field.robot`):
-        | =Setting= | =Value=                                            |
-        | Library   | robotframework_okw_remote_ssh.RemoteSshLibrary     |
-        |           |                                                    |
-        | =Test Cases=  |           |                           |        |
-        | Store And Reuse Hostname  |                           |        |
-        |     Open Remote Session          | r1                | myserver |
-        |     Set Remote                   | r1                | hostname |
-        |     Memorize Remote Response Field | r1              | stdout   | HOST |
-        |     Set Remote                   | r1                | ping -c1 $MEM{HOST} |
-        |     Verify Remote Exit Code      | r1                | 0        |
-        |     Close Remote Session         | r1                |          |
+        Example (``memorize_field.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Test Cases ***
+        | Store And Reuse Hostname
+        |     Open Remote Session              r1    myserver
+        |     Set Remote                       r1    hostname
+        |     Memorize Remote Response Field   r1    stdout    HOST
+        |     Set Remote                       r1    ping -c1 $MEM{HOST}
+        |     Verify Remote Exit Code          r1    0
+        |     Close Remote Session             r1
         """
         resp = self._ensure_last_response(session_name)
         if field not in resp:
