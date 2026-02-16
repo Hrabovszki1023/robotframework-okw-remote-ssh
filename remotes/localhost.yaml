@@ -1,0 +1,9 @@
+host: "127.0.0.1"
+port: 22
+username: "Zoltan"
+auth:
+  type: password
+  secret_id: "localhost/windows11"
+timeout: 5
+encoding: "utf-8"
+

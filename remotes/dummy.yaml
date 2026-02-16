@@ -1,0 +1,8 @@
+host: "localhost"
+port: 22
+username: "test"
+auth:
+  type: password
+  secret_id: "dummy/contract"
+timeout: 5
+encoding: "utf-8"
