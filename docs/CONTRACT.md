@@ -97,6 +97,7 @@ File transfer keywords store transfer metrics in `last_response`:
 - SFTP errors (IO, permission, path not found) cause immediate **FAIL**.
 - Remote parent directories are created automatically (like `mkdir -p`).
 - `Remove Remote Directory` only removes empty directories; use `Remove Remote Directory Recursively` for non-empty directories.
+- All remove keywords are **idempotent**: if the target does not exist, they log an info message and return PASS (the target state "absent" is already reached). Use `Verify Remote File Exists` / `Verify Remote Directory Exists` to explicitly assert presence or absence.
 
 ## OKW Global Tokens
 

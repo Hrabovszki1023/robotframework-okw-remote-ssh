@@ -1319,7 +1319,7 @@ class RemoteSshLibrary:
     # -------------------------
     @keyword("Remove Remote File")
     def remove_remote_file(self, session_name: str, remote_path: str):
-        """Removes a file on the remote host via SFTP.
+        """Removes a file on the remote host via SFTP. Idempotent.
 
         Arguments:
         - ``session_name``: The session to use (e.g. ``r1``).
@@ -1330,7 +1330,9 @@ class RemoteSshLibrary:
         - Expands ``$MEM{KEY}`` in the path parameter.
         - If the expanded path is ``$IGNORE``: no action is taken (PASS).
         - Removes the specified file via SFTP.
-        - Fails if the file does not exist or the SFTP operation fails.
+        - If the file does not exist, logs an info message and returns PASS
+          (the target state "file absent" is already reached).
+        - Use ``Verify Remote File Exists`` to explicitly assert presence or absence.
 
         Example (``remove_remote_file.robot``):
         | *** Settings ***
@@ -1353,7 +1355,10 @@ class RemoteSshLibrary:
         if self._backend == "paramiko":
             sftp = self._open_sftp(session_name)
             try:
-                self._sftp_remove_file(sftp, expanded)
+                try:
+                    self._sftp_remove_file(sftp, expanded)
+                except FileNotFoundError:
+                    logger.info(f"File does not exist (already absent): {expanded}")
             finally:
                 sftp.close()
         else:
@@ -1362,7 +1367,7 @@ class RemoteSshLibrary:
 
     @keyword("Remove Remote Directory")
     def remove_remote_directory(self, session_name: str, remote_dir: str):
-        """Removes an empty directory on the remote host via SFTP.
+        """Removes an empty directory on the remote host via SFTP. Idempotent.
 
         Arguments:
         - ``session_name``: The session to use (e.g. ``r1``).
@@ -1373,10 +1378,13 @@ class RemoteSshLibrary:
         - Expands ``$MEM{KEY}`` in the path parameter.
         - If the expanded path is ``$IGNORE``: no action is taken (PASS).
         - Removes the directory only if it is empty.
-        - Fails if the directory is not empty, does not exist, or the SFTP
-          operation fails.
+        - If the directory does not exist, logs an info message and returns PASS
+          (the target state "directory absent" is already reached).
+        - Fails if the directory is not empty.
         - To remove a directory with all contents, use
           ``Remove Remote Directory Recursively`` instead.
+        - Use ``Verify Remote Directory Exists`` to explicitly assert presence
+          or absence.
 
         Example (``remove_remote_directory.robot``):
         | *** Settings ***
@@ -1392,7 +1400,7 @@ class RemoteSshLibrary:
 
     @keyword("Remove Remote Directory Recursively")
     def remove_remote_directory_recursively(self, session_name: str, remote_dir: str):
-        """Removes a directory and all its contents on the remote host via SFTP.
+        """Removes a directory and all its contents on the remote host via SFTP. Idempotent.
 
         Arguments:
         - ``session_name``: The session to use (e.g. ``r1``).
@@ -1404,7 +1412,10 @@ class RemoteSshLibrary:
         - If the expanded path is ``$IGNORE``: no action is taken (PASS).
         - Removes all files and subdirectories first, then removes the
           directory itself.
-        - Fails if the directory does not exist or the SFTP operation fails.
+        - If the directory does not exist, logs an info message and returns PASS
+          (the target state "directory absent" is already reached).
+        - Use ``Verify Remote Directory Exists`` to explicitly assert presence
+          or absence.
 
         Example (``remove_remote_directory_recursively.robot``):
         | *** Settings ***
@@ -1420,7 +1431,7 @@ class RemoteSshLibrary:
         self._remove_remote_directory(session_name, remote_dir, recursive=True)
 
     def _remove_remote_directory(self, session_name: str, remote_dir: str, recursive: bool):
-        """Internal: removes a remote directory (empty-only or recursive)."""
+        """Internal: removes a remote directory (empty-only or recursive). Idempotent."""
         s = self._ensure_session(session_name)
 
         expanded = expand_mem(remote_dir, self._store)
@@ -1430,7 +1441,10 @@ class RemoteSshLibrary:
         if self._backend == "paramiko":
             sftp = self._open_sftp(session_name)
             try:
-                self._sftp_remove_dir(sftp, expanded, recursive=recursive)
+                try:
+                    self._sftp_remove_dir(sftp, expanded, recursive=recursive)
+                except FileNotFoundError:
+                    logger.info(f"Directory does not exist (already absent): {expanded}")
             finally:
                 sftp.close()
         else:
