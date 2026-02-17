@@ -100,7 +100,13 @@ Verify Response Should Work
 Verify Response WCM Should Work
     Open Remote Session    r1    dummy
     Set Remote             r1    hello world
-    Verify Remote Response WCM    r1    world
+    Verify Remote Response WCM    r1    *world
+    Close Remote Session   r1
+
+Verify Response WCM Question Mark Should Work
+    Open Remote Session    r1    dummy
+    Set Remote             r1    Date: 23.10.1963
+    Verify Remote Response WCM    r1    Date: ??.??.????
     Close Remote Session   r1
 
 Verify Response REGX Should Work
@@ -112,8 +118,14 @@ Verify Response REGX Should Work
 Verify Stderr WCM Should Work
     Open Remote Session    r1    dummy
     Set Remote             r1    abc
-    # Stub stderr is empty -> WCM match against empty string
+    # Stub stderr is empty -> WCM empty pattern matches empty string
     Verify Remote Stderr WCM    r1    ${EMPTY}
+    Close Remote Session   r1
+
+Verify Response WCM Combined Should Work
+    Open Remote Session    r1    dummy
+    Set Remote             r1    Name Hans Mueller Datum 23.10.1963 Ort Graz
+    Verify Remote Response WCM    r1    *Hans Mueller* ??.??.???? *
     Close Remote Session   r1
 
 Verify Stderr REGX Should Work

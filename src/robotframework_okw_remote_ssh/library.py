@@ -620,12 +620,17 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Response WCM")
     def verify_remote_response_wcm(self, session_name: str, pattern: str):
-        """Verifies that stdout of the last command contains the pattern (wildcard/contains match).
+        """Verifies that stdout of the last command matches a wildcard pattern.
 
         Arguments:
         - ``session_name``: The session to verify (e.g. ``r1``).
         - ``pattern``: The wildcard pattern to match against stdout.
           Supports ``$MEM{KEY}`` expansion.
+
+        Wildcard syntax:
+        - ``*`` matches any number of characters (including zero).
+        - ``?`` matches exactly one character.
+        - Use ``*text*`` to check if stdout contains ``text`` anywhere.
 
         Special tokens:
         - ``$IGNORE``: Skips verification (PASS).
@@ -639,7 +644,13 @@ class RemoteSshLibrary:
         | Verify Stdout Contains Substring
         |     Open Remote Session          r1    myserver
         |     Set Remote                   r1    uname -a
-        |     Verify Remote Response WCM   r1    Linux
+        |     Verify Remote Response WCM   r1    *Linux*
+        |     Close Remote Session         r1
+        |
+        | Verify Date Format With Single Char Wildcard
+        |     Open Remote Session          r1    myserver
+        |     Set Remote                   r1    date +%d.%m.%Y
+        |     Verify Remote Response WCM   r1    ??.??.????
         |     Close Remote Session         r1
         """
         actual = str(self._get_response_field(session_name, "stdout") or "")
@@ -722,12 +733,17 @@ class RemoteSshLibrary:
 
     @keyword("Verify Remote Stderr WCM")
     def verify_remote_stderr_wcm(self, session_name: str, pattern: str = "$EMPTY"):
-        """Verifies that stderr of the last command contains the pattern (wildcard/contains match).
+        """Verifies that stderr of the last command matches a wildcard pattern.
 
         Arguments:
         - ``session_name``: The session to verify (e.g. ``r1``).
         - ``pattern``: The wildcard pattern to match against stderr (default: ``$EMPTY``).
           Supports ``$MEM{KEY}`` expansion.
+
+        Wildcard syntax:
+        - ``*`` matches any number of characters (including zero).
+        - ``?`` matches exactly one character.
+        - Use ``*text*`` to check if stderr contains ``text`` anywhere.
 
         Default semantics:
         - When called without ``pattern``, asserts that stderr is empty.
