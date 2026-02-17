@@ -58,10 +58,13 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 
 ### File Transfer – Verify
 
-| Keyword | Parameters | Description |
-|---------|-----------|-------------|
-| `Verify Remote File Exists` | `<session>` `<remote_path>` | Asserts that a file exists on the remote host |
-| `Verify Remote Directory Exists` | `<session>` `<remote_dir>` | Asserts that a directory exists on the remote host |
+| Keyword | Parameters | Default | Description |
+|---------|-----------|---------|-------------|
+| `Verify Remote File Exists` | `<session>` `<remote_path>` `[expected]` | `YES` | Asserts file exists (`YES`) or does not exist (`NO`) |
+| `Verify Remote Directory Exists` | `<session>` `<remote_dir>` `[expected]` | `YES` | Asserts directory exists (`YES`) or does not exist (`NO`) |
+
+The ``expected`` parameter accepts ``YES``/``NO``, ``TRUE``/``FALSE``, or ``1``/``0`` (case-insensitive).
+This follows the OKW ``YES/NO`` existence model defined in ``okw-contract-utils``.
 
 ### File Transfer – Remove (idempotent)
 

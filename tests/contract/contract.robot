@@ -168,14 +168,38 @@ Get Remote Directory Should Work
     Get Remote Directory    r1    /tmp/fixtures    ${OUTPUTDIR}/downloaded_dir
     Close Remote Session   r1
 
-Verify Remote File Exists Should Work
-    [Documentation]    Stub always passes for Verify Remote File Exists.
+Verify Remote File Exists YES Should Work
+    [Documentation]    Stub matches YES expectation.
+    Open Remote Session    r1    dummy
+    Verify Remote File Exists    r1    /tmp/testfile.txt    YES
+    Close Remote Session   r1
+
+Verify Remote File Exists NO Should Work
+    [Documentation]    Stub matches NO expectation.
+    Open Remote Session    r1    dummy
+    Verify Remote File Exists    r1    /tmp/nonexistent.txt    NO
+    Close Remote Session   r1
+
+Verify Remote File Exists Default Is YES
+    [Documentation]    Without expected parameter, default is YES.
     Open Remote Session    r1    dummy
     Verify Remote File Exists    r1    /tmp/testfile.txt
     Close Remote Session   r1
 
-Verify Remote Directory Exists Should Work
-    [Documentation]    Stub always passes for Verify Remote Directory Exists.
+Verify Remote Directory Exists YES Should Work
+    [Documentation]    Stub matches YES expectation.
+    Open Remote Session    r1    dummy
+    Verify Remote Directory Exists    r1    /tmp/fixtures    YES
+    Close Remote Session   r1
+
+Verify Remote Directory Exists NO Should Work
+    [Documentation]    Stub matches NO expectation.
+    Open Remote Session    r1    dummy
+    Verify Remote Directory Exists    r1    /tmp/nonexistent_dir    NO
+    Close Remote Session   r1
+
+Verify Remote Directory Exists Default Is YES
+    [Documentation]    Without expected parameter, default is YES.
     Open Remote Session    r1    dummy
     Verify Remote Directory Exists    r1    /tmp/fixtures
     Close Remote Session   r1

@@ -1,6 +1,6 @@
 from robot.api.deco import keyword, library
 from okw_contract_utils import expand_mem, MatchMode, assert_match
-from okw_contract_utils.tokens import is_ignore, is_empty_token
+from okw_contract_utils.tokens import is_ignore, is_empty_token, parse_yes_no, assert_exists
 from .secrets import SecretStore
 from robot.api import logger
 
@@ -1224,18 +1224,21 @@ class RemoteSshLibrary:
     # File Transfer – Verify
     # -------------------------
     @keyword("Verify Remote File Exists")
-    def verify_remote_file_exists(self, session_name: str, remote_path: str):
-        """Verifies that a file exists on the remote host.
+    def verify_remote_file_exists(self, session_name: str, remote_path: str, expected: str = "YES"):
+        """Verifies whether a file exists on the remote host or not.
 
         Arguments:
         - ``session_name``: The session to use (e.g. ``r1``).
         - ``remote_path``: Path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``expected``: ``YES`` (file must exist) or ``NO`` (file must not exist).
+          Accepts YES/NO, TRUE/FALSE, 1/0 (case-insensitive). Default: ``YES``.
 
         Behavior:
         - Expands ``$MEM{KEY}`` in the path parameter.
         - If the expanded path is ``$IGNORE``: verification is skipped (PASS).
-        - Checks via SFTP ``stat()`` that the file exists and is a regular file.
-        - Fails with ``AssertionError`` if the file does not exist.
+        - Checks via SFTP ``stat()`` whether the path exists and is a regular file.
+        - Passes when the actual existence matches ``expected``.
+        - Fails with ``AssertionError`` if the check does not match.
 
         Example (``verify_remote_file_exists.robot``):
         | *** Settings ***
@@ -1245,7 +1248,13 @@ class RemoteSshLibrary:
         | Artifact Was Uploaded Successfully
         |     Open Remote Session          r1    buildserver01
         |     Put Remote File              r1    ${CURDIR}/artifact.zip    /tmp/artifact.zip
-        |     Verify Remote File Exists    r1    /tmp/artifact.zip
+        |     Verify Remote File Exists    r1    /tmp/artifact.zip    YES
+        |     Close Remote Session         r1
+        |
+        | File Was Removed
+        |     Open Remote Session          r1    buildserver01
+        |     Remove Remote File           r1    /tmp/old.dat
+        |     Verify Remote File Exists    r1    /tmp/old.dat    NO
         |     Close Remote Session         r1
         """
         s = self._ensure_session(session_name)
@@ -1254,34 +1263,39 @@ class RemoteSshLibrary:
         if self._check_ignore(expanded):
             return
 
+        yes_no = parse_yes_no(expected)
+
         if self._backend == "paramiko":
             sftp = self._open_sftp(session_name)
             try:
                 st = self._sftp_stat(sftp, expanded)
-                if st is None:
-                    raise AssertionError(f"Remote file does not exist: {expanded}")
-                if stat.S_ISDIR(st.st_mode):
-                    raise AssertionError(f"Remote path exists but is a directory, not a file: {expanded}")
+                file_exists = st is not None and not stat.S_ISDIR(st.st_mode)
             finally:
                 sftp.close()
         else:
-            # stub: always passes
-            logger.info(f"STUB: Verify Remote File Exists -> {expanded}")
+            # stub: simulate based on YES/NO expectation (always matches)
+            file_exists = (yes_no.value == "YES")
+            logger.info(f"STUB: Verify Remote File Exists -> {expanded} (expected={yes_no.value})")
+
+        assert_exists(file_exists, yes_no, context=f"[{session_name}] file: {expanded}")
 
     @keyword("Verify Remote Directory Exists")
-    def verify_remote_directory_exists(self, session_name: str, remote_dir: str):
-        """Verifies that a directory exists on the remote host.
+    def verify_remote_directory_exists(self, session_name: str, remote_dir: str, expected: str = "YES"):
+        """Verifies whether a directory exists on the remote host or not.
 
         Arguments:
         - ``session_name``: The session to use (e.g. ``r1``).
         - ``remote_dir``: Directory path on the remote host.
           Supports ``$MEM{KEY}`` expansion.
+        - ``expected``: ``YES`` (directory must exist) or ``NO`` (must not exist).
+          Accepts YES/NO, TRUE/FALSE, 1/0 (case-insensitive). Default: ``YES``.
 
         Behavior:
         - Expands ``$MEM{KEY}`` in the path parameter.
         - If the expanded path is ``$IGNORE``: verification is skipped (PASS).
-        - Checks via SFTP ``stat()`` that the directory exists and is a directory.
-        - Fails with ``AssertionError`` if the directory does not exist.
+        - Checks via SFTP ``stat()`` whether the path exists and is a directory.
+        - Passes when the actual existence matches ``expected``.
+        - Fails with ``AssertionError`` if the check does not match.
 
         Example (``verify_remote_directory_exists.robot``):
         | *** Settings ***
@@ -1291,7 +1305,13 @@ class RemoteSshLibrary:
         | Application Directory Was Created
         |     Open Remote Session               r1    appserver
         |     Put Remote Directory              r1    ${CURDIR}/dist    /opt/app/dist
-        |     Verify Remote Directory Exists    r1    /opt/app/dist
+        |     Verify Remote Directory Exists    r1    /opt/app/dist    YES
+        |     Close Remote Session              r1
+        |
+        | Old Directory Was Cleaned Up
+        |     Open Remote Session               r1    appserver
+        |     Remove Remote Directory Recursively    r1    /opt/app/old_dist
+        |     Verify Remote Directory Exists    r1    /opt/app/old_dist    NO
         |     Close Remote Session              r1
         """
         s = self._ensure_session(session_name)
@@ -1300,19 +1320,21 @@ class RemoteSshLibrary:
         if self._check_ignore(expanded):
             return
 
+        yes_no = parse_yes_no(expected)
+
         if self._backend == "paramiko":
             sftp = self._open_sftp(session_name)
             try:
                 st = self._sftp_stat(sftp, expanded)
-                if st is None:
-                    raise AssertionError(f"Remote directory does not exist: {expanded}")
-                if not stat.S_ISDIR(st.st_mode):
-                    raise AssertionError(f"Remote path exists but is a file, not a directory: {expanded}")
+                dir_exists = st is not None and stat.S_ISDIR(st.st_mode)
             finally:
                 sftp.close()
         else:
-            # stub: always passes
-            logger.info(f"STUB: Verify Remote Directory Exists -> {expanded}")
+            # stub: simulate based on YES/NO expectation (always matches)
+            dir_exists = (yes_no.value == "YES")
+            logger.info(f"STUB: Verify Remote Directory Exists -> {expanded} (expected={yes_no.value})")
+
+        assert_exists(dir_exists, yes_no, context=f"[{session_name}] directory: {expanded}")
 
     # -------------------------
     # File Transfer – Remove
