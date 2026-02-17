@@ -1361,54 +1361,78 @@ class RemoteSshLibrary:
             logger.info(f"STUB: Remove Remote File -> {expanded}")
 
     @keyword("Remove Remote Directory")
-    def remove_remote_directory(self, session_name: str, remote_dir: str, recursive: str = "True"):
-        """Removes a directory on the remote host via SFTP.
+    def remove_remote_directory(self, session_name: str, remote_dir: str):
+        """Removes an empty directory on the remote host via SFTP.
 
         Arguments:
         - ``session_name``: The session to use (e.g. ``r1``).
         - ``remote_dir``: Path of the directory to remove on the remote host.
           Supports ``$MEM{KEY}`` expansion.
-        - ``recursive``: If ``True`` (default), removes directory and all contents
-          recursively. If ``False``, only removes if the directory is empty.
 
         Behavior:
         - Expands ``$MEM{KEY}`` in the path parameter.
         - If the expanded path is ``$IGNORE``: no action is taken (PASS).
-        - If ``recursive=True``: removes all files and subdirectories first,
-          then removes the directory itself.
-        - If ``recursive=False``: fails if the directory is not empty.
-        - Fails if the directory does not exist or the SFTP operation fails.
+        - Removes the directory only if it is empty.
+        - Fails if the directory is not empty, does not exist, or the SFTP
+          operation fails.
+        - To remove a directory with all contents, use
+          ``Remove Remote Directory Recursively`` instead.
 
         Example (``remove_remote_directory.robot``):
         | *** Settings ***
         | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
         |
         | *** Test Cases ***
-        | Deploy And Cleanup Old Version
+        | Remove Empty Temp Directory
         |     Open Remote Session         r1    appserver
-        |     Remove Remote Directory     r1    /opt/app/old_dist
-        |     Put Remote Directory        r1    ${CURDIR}/dist    /opt/app/dist
-        |     Close Remote Session        r1
-        |
-        | Remove Empty Directory Only
-        |     Open Remote Session         r1    appserver
-        |     Remove Remote Directory     r1    /tmp/empty_dir    recursive=False
+        |     Remove Remote Directory     r1    /tmp/empty_dir
         |     Close Remote Session        r1
         """
+        self._remove_remote_directory(session_name, remote_dir, recursive=False)
+
+    @keyword("Remove Remote Directory Recursively")
+    def remove_remote_directory_recursively(self, session_name: str, remote_dir: str):
+        """Removes a directory and all its contents on the remote host via SFTP.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Path of the directory to remove on the remote host.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in the path parameter.
+        - If the expanded path is ``$IGNORE``: no action is taken (PASS).
+        - Removes all files and subdirectories first, then removes the
+          directory itself.
+        - Fails if the directory does not exist or the SFTP operation fails.
+
+        Example (``remove_remote_directory_recursively.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Deploy And Cleanup Old Version
+        |     Open Remote Session                      r1    appserver
+        |     Remove Remote Directory Recursively      r1    /opt/app/old_dist
+        |     Put Remote Directory                     r1    ${CURDIR}/dist    /opt/app/dist
+        |     Close Remote Session                     r1
+        """
+        self._remove_remote_directory(session_name, remote_dir, recursive=True)
+
+    def _remove_remote_directory(self, session_name: str, remote_dir: str, recursive: bool):
+        """Internal: removes a remote directory (empty-only or recursive)."""
         s = self._ensure_session(session_name)
 
         expanded = expand_mem(remote_dir, self._store)
         if self._check_ignore(expanded):
             return
 
-        is_recursive = str(recursive).strip().lower() in ("true", "1", "yes")
-
         if self._backend == "paramiko":
             sftp = self._open_sftp(session_name)
             try:
-                self._sftp_remove_dir(sftp, expanded, recursive=is_recursive)
+                self._sftp_remove_dir(sftp, expanded, recursive=recursive)
             finally:
                 sftp.close()
         else:
             # stub: log only
-            logger.info(f"STUB: Remove Remote Directory -> {expanded} (recursive={is_recursive})")
+            logger.info(f"STUB: Remove Remote Directory -> {expanded} (recursive={recursive})")

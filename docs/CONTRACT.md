@@ -68,7 +68,8 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 | Keyword | Parameters | Description |
 |---------|-----------|-------------|
 | `Remove Remote File` | `<session>` `<remote_path>` | Removes a file on the remote host |
-| `Remove Remote Directory` | `<session>` `<remote_dir>` `[recursive=True]` | Removes a directory on the remote host (recursive by default) |
+| `Remove Remote Directory` | `<session>` `<remote_dir>` | Removes an empty directory on the remote host |
+| `Remove Remote Directory Recursively` | `<session>` `<remote_dir>` | Removes a directory and all its contents |
 
 ## File Transfer Details
 
@@ -95,7 +96,7 @@ File transfer keywords store transfer metrics in `last_response`:
 - All transfers are **synchronous** and **deterministic**.
 - SFTP errors (IO, permission, path not found) cause immediate **FAIL**.
 - Remote parent directories are created automatically (like `mkdir -p`).
-- `Remove Remote Directory` defaults to `recursive=True`; set `recursive=False` to only remove empty directories.
+- `Remove Remote Directory` only removes empty directories; use `Remove Remote Directory Recursively` for non-empty directories.
 
 ## OKW Global Tokens
 

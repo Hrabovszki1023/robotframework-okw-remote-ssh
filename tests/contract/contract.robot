@@ -187,9 +187,15 @@ Remove Remote File Should Work
     Close Remote Session   r1
 
 Remove Remote Directory Should Work
-    [Documentation]    Stub logs the removal action.
+    [Documentation]    Stub logs the removal action (empty directory).
     Open Remote Session    r1    dummy
-    Remove Remote Directory    r1    /tmp/fixtures
+    Remove Remote Directory    r1    /tmp/empty_dir
+    Close Remote Session   r1
+
+Remove Remote Directory Recursively Should Work
+    [Documentation]    Stub logs the recursive removal action.
+    Open Remote Session    r1    dummy
+    Remove Remote Directory Recursively    r1    /tmp/fixtures
     Close Remote Session   r1
 
 Ignore Token Should Skip Put Remote File
@@ -220,6 +226,11 @@ Ignore Token Should Skip Put Remote Directory
 Ignore Token Should Skip Remove Remote Directory
     Open Remote Session    r1    dummy
     Remove Remote Directory    r1    ${IGNORE}
+    Close Remote Session   r1
+
+Ignore Token Should Skip Remove Remote Directory Recursively
+    Open Remote Session    r1    dummy
+    Remove Remote Directory Recursively    r1    ${IGNORE}
     Close Remote Session   r1
 
 Put Remote File Should Store Last Response
