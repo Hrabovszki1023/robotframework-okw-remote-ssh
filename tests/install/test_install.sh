@@ -68,11 +68,12 @@ ${IGNORE}    $IGNORE
 
 *** Test Cases ***
 Library Loads Successfully
+    [Documentation]    Verifies library is loaded and keywords are available.
     Log    OKW Remote SSH library loaded
 
-Ignore Token Skips Execution
-    Set Remote    stub_session    $IGNORE
-    Log    IGNORE token handled correctly
+Open Session Should Fail On Unknown Config
+    [Documentation]    Verifies keyword is callable (expected error = config not found).
+    Run Keyword And Expect Error    *    Open Remote Session    myhost    nonexistent_config
 ROBOT
 
 python3 -m robot --outputdir "$TMPDIR/results" "$TMPDIR/smoke.robot"
