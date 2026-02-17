@@ -4,19 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "robotframework-okw-remote-ssh"
-version = "0.1.2"
-description = "Standalone Robot Framework library for deterministic remote interaction via SSH."
+version = "0.2.0"
+description = "Robot Framework keyword library for deterministic remote command execution and SFTP file transfer via SSH."
 authors = [{ name = "Zoltán Hrabovszki" }]
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 requires-python = ">=3.9"
+keywords = ["robotframework", "testing", "testautomation", "ssh", "sftp", "okw"]
 dependencies = [
   "robotframework>=6.0",
   "paramiko>=3.4.0",
   "PyYAML>=6.0",
-  "okw-contract-utils>=0.1.1",
+  "okw-contract-utils>=0.2.0",
 ]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.9",
@@ -28,6 +31,7 @@ classifiers = [
   "Framework :: Robot Framework",
   "Framework :: Robot Framework :: Library",
   "Topic :: Software Development :: Testing",
+  "Topic :: System :: Networking",
 ]
 
 [project.urls]
