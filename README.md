@@ -26,7 +26,7 @@ pip install robotframework-okw-remote-ssh
 
 ```robot
 *** Settings ***
-Library    robotframework_okw_remote_ssh
+Library    robotframework_okw_remote_ssh.RemoteSshLibrary
 
 *** Variables ***
 ${IGNORE}    $IGNORE

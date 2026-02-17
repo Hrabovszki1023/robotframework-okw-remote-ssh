@@ -6,7 +6,7 @@ Documentation     Live SSH integration test.
 ...
 ...               Run:  python -m robot tests/install/test_ssh_live.robot
 
-Library           robotframework_okw_remote_ssh    backend=paramiko
+Library           robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
 
 *** Variables ***
 ${SESSION}    testhost

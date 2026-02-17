@@ -61,7 +61,7 @@ echo "[6/6] Running minimal Robot Framework test..."
 TMPDIR=$(mktemp -d)
 cat > "$TMPDIR/smoke.robot" << 'ROBOT'
 *** Settings ***
-Library    robotframework_okw_remote_ssh
+Library    robotframework_okw_remote_ssh.RemoteSshLibrary
 
 *** Variables ***
 ${IGNORE}    $IGNORE
