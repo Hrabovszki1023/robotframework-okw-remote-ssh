@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from robot.api.deco import keyword, library
 from okw_contract_utils import expand_mem, MatchMode, assert_match
 from okw_contract_utils.tokens import is_ignore, is_empty_token, parse_yes_no, assert_exists
