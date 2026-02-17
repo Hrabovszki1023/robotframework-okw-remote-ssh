@@ -66,6 +66,13 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 The ``expected`` parameter accepts ``YES``/``NO``, ``TRUE``/``FALSE``, or ``1``/``0`` (case-insensitive).
 This follows the OKW ``YES/NO`` existence model defined in ``okw-contract-utils``.
 
+### File Transfer – Clear (delete files, keep directory structure)
+
+| Keyword | Parameters | Description |
+|---------|-----------|-------------|
+| `Clear Remote Directory` | `<session>` `<remote_dir>` | Deletes files directly in the directory (not in subdirectories) |
+| `Clear Remote Directory Recursively` | `<session>` `<remote_dir>` | Deletes all files recursively, keeps entire directory tree |
+
 ### File Transfer – Remove (idempotent)
 
 All remove keywords are **idempotent**: if the target does not exist, they log

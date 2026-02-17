@@ -204,6 +204,28 @@ Verify Remote Directory Exists Default Is YES
     Verify Remote Directory Exists    r1    /tmp/fixtures
     Close Remote Session   r1
 
+Clear Remote Directory Should Work
+    [Documentation]    Stub logs the clear action (non-recursive).
+    Open Remote Session    r1    dummy
+    Clear Remote Directory    r1    /tmp/fixtures
+    Close Remote Session   r1
+
+Clear Remote Directory Recursively Should Work
+    [Documentation]    Stub logs the recursive clear action.
+    Open Remote Session    r1    dummy
+    Clear Remote Directory Recursively    r1    /tmp/fixtures
+    Close Remote Session   r1
+
+Ignore Token Should Skip Clear Remote Directory
+    Open Remote Session    r1    dummy
+    Clear Remote Directory    r1    ${IGNORE}
+    Close Remote Session   r1
+
+Ignore Token Should Skip Clear Remote Directory Recursively
+    Open Remote Session    r1    dummy
+    Clear Remote Directory Recursively    r1    ${IGNORE}
+    Close Remote Session   r1
+
 Remove Remote File Should Work
     [Documentation]    Stub logs the removal action.
     Open Remote Session    r1    dummy

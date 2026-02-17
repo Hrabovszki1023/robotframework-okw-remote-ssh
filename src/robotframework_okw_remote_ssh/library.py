@@ -322,6 +322,23 @@ class RemoteSshLibrary:
                     sftp.remove(child)
         sftp.rmdir(remote_dir)
 
+    def _sftp_clear_dir(self, sftp, remote_dir: str, recursive: bool):
+        """Deletes all files in a directory, keeps directory structure.
+
+        If recursive=False, only files directly in remote_dir are deleted.
+        If recursive=True, files in all subdirectories are deleted too.
+        """
+        files_removed = 0
+        for entry in sftp.listdir_attr(remote_dir):
+            child = f"{remote_dir}/{entry.filename}"
+            if stat.S_ISDIR(entry.st_mode):
+                if recursive:
+                    files_removed += self._sftp_clear_dir(sftp, child, recursive=True)
+            else:
+                sftp.remove(child)
+                files_removed += 1
+        return files_removed
+
     def _log_transfer(self, response: dict):
         """ASR logging for transfer keywords."""
         parts = [f"action: {response.get('action', '?')}"]
@@ -334,6 +351,8 @@ class RemoteSshLibrary:
             parts.append(f"bytes_total: {response['bytes_total']}")
         if "files_transferred" in response:
             parts.append(f"files_transferred: {response['files_transferred']}")
+        if "files_removed" in response:
+            parts.append(f"files_removed: {response['files_removed']}")
         if "dirs_created" in response:
             parts.append(f"dirs_created: {response['dirs_created']}")
         parts.append(f"duration_ms: {response.get('duration_ms', 0)}")
@@ -1337,7 +1356,101 @@ class RemoteSshLibrary:
         assert_exists(dir_exists, yes_no, context=f"[{session_name}] directory: {expanded}")
 
     # -------------------------
-    # File Transfer – Remove
+    # File Transfer – Clear (delete files, keep directory structure)
+    # -------------------------
+    @keyword("Clear Remote Directory")
+    def clear_remote_directory(self, session_name: str, remote_dir: str):
+        """Deletes all files directly in the remote directory. Directory structure is preserved.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory on the remote host. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in the path parameter.
+        - If the expanded path is ``$IGNORE``: no action is taken (PASS).
+        - Deletes only files directly in the given directory (not in subdirectories).
+        - Subdirectories and their contents are left untouched.
+        - To also clear files in subdirectories, use
+          ``Clear Remote Directory Recursively``.
+
+        Example (``clear_remote_directory.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Clear Top Level Files Only
+        |     Open Remote Session        r1    appserver
+        |     Clear Remote Directory     r1    /var/log/app
+        |     # subdirectories like /var/log/app/archive/ remain with their files
+        |     Close Remote Session       r1
+        """
+        self._clear_remote_directory(session_name, remote_dir, recursive=False)
+
+    @keyword("Clear Remote Directory Recursively")
+    def clear_remote_directory_recursively(self, session_name: str, remote_dir: str):
+        """Deletes all files in the remote directory and its subdirectories. Directory structure is preserved.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory on the remote host. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in the path parameter.
+        - If the expanded path is ``$IGNORE``: no action is taken (PASS).
+        - Deletes all files recursively in the directory tree.
+        - All subdirectories are kept (empty after clearing).
+
+        Example (``clear_remote_directory_recursively.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Clear All Files But Keep Structure
+        |     Open Remote Session                  r1    appserver
+        |     Clear Remote Directory Recursively   r1    /var/log/app
+        |     # all files gone, but directory tree still intact
+        |     Verify Remote Directory Exists       r1    /var/log/app    YES
+        |     Close Remote Session                 r1
+        """
+        self._clear_remote_directory(session_name, remote_dir, recursive=True)
+
+    def _clear_remote_directory(self, session_name: str, remote_dir: str, recursive: bool):
+        """Internal: clears files in a remote directory (keeps directory structure)."""
+        s = self._ensure_session(session_name)
+
+        expanded = expand_mem(remote_dir, self._store)
+        if self._check_ignore(expanded):
+            return
+
+        start = time.time()
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                files_removed = self._sftp_clear_dir(sftp, expanded, recursive=recursive)
+            finally:
+                sftp.close()
+        else:
+            # stub: log only
+            files_removed = 0
+            logger.info(f"STUB: Clear Remote Directory -> {expanded} (recursive={recursive})")
+
+        dur_ms = int((time.time() - start) * 1000)
+
+        response = {
+            "action": "clear_dir" if not recursive else "clear_dir_recursive",
+            "remote_dir": expanded,
+            "files_removed": files_removed,
+            "duration_ms": dur_ms,
+        }
+        s["last_response"] = response
+        self._log_transfer(response)
+
+        return response
+
+    # -------------------------
+    # File Transfer – Remove (idempotent)
     # -------------------------
     @keyword("Remove Remote File")
     def remove_remote_file(self, session_name: str, remote_path: str):
