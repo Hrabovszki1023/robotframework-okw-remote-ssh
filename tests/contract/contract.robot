@@ -129,3 +129,92 @@ Set Remote And Continue Should Not Fail On Nonzero Exit
     Set Remote And Continue    r1    abc
     Verify Remote Exit Code    r1    0
     Close Remote Session   r1
+
+# ---- File Transfer Keywords ----
+
+Put Remote File Should Work
+    [Documentation]    Stub simulates upload; last_response contains transfer metrics.
+    Open Remote Session    r1    dummy
+    Put Remote File    r1    ${CURDIR}/fixtures/testfile.txt    /tmp/testfile.txt
+    Close Remote Session   r1
+
+Get Remote File Should Work
+    [Documentation]    Stub simulates download; last_response contains transfer metrics.
+    Open Remote Session    r1    dummy
+    Get Remote File    r1    /tmp/testfile.txt    ${OUTPUTDIR}/downloaded.txt
+    Close Remote Session   r1
+
+Put Remote Directory Should Work
+    [Documentation]    Stub simulates recursive directory upload.
+    Open Remote Session    r1    dummy
+    Put Remote Directory    r1    ${CURDIR}/fixtures    /tmp/fixtures
+    Close Remote Session   r1
+
+Get Remote Directory Should Work
+    [Documentation]    Stub simulates recursive directory download.
+    Open Remote Session    r1    dummy
+    Get Remote Directory    r1    /tmp/fixtures    ${OUTPUTDIR}/downloaded_dir
+    Close Remote Session   r1
+
+Verify Remote File Exists Should Work
+    [Documentation]    Stub always passes for Verify Remote File Exists.
+    Open Remote Session    r1    dummy
+    Verify Remote File Exists    r1    /tmp/testfile.txt
+    Close Remote Session   r1
+
+Verify Remote Directory Exists Should Work
+    [Documentation]    Stub always passes for Verify Remote Directory Exists.
+    Open Remote Session    r1    dummy
+    Verify Remote Directory Exists    r1    /tmp/fixtures
+    Close Remote Session   r1
+
+Remove Remote File Should Work
+    [Documentation]    Stub logs the removal action.
+    Open Remote Session    r1    dummy
+    Remove Remote File    r1    /tmp/testfile.txt
+    Close Remote Session   r1
+
+Remove Remote Directory Should Work
+    [Documentation]    Stub logs the removal action.
+    Open Remote Session    r1    dummy
+    Remove Remote Directory    r1    /tmp/fixtures
+    Close Remote Session   r1
+
+Ignore Token Should Skip Put Remote File
+    Open Remote Session    r1    dummy
+    Put Remote File    r1    ${IGNORE}    /tmp/ignored.txt
+    Close Remote Session   r1
+
+Ignore Token Should Skip Get Remote File
+    Open Remote Session    r1    dummy
+    Get Remote File    r1    ${IGNORE}    ${OUTPUTDIR}/ignored.txt
+    Close Remote Session   r1
+
+Ignore Token Should Skip Verify Remote File Exists
+    Open Remote Session    r1    dummy
+    Verify Remote File Exists    r1    ${IGNORE}
+    Close Remote Session   r1
+
+Ignore Token Should Skip Remove Remote File
+    Open Remote Session    r1    dummy
+    Remove Remote File    r1    ${IGNORE}
+    Close Remote Session   r1
+
+Ignore Token Should Skip Put Remote Directory
+    Open Remote Session    r1    dummy
+    Put Remote Directory    r1    ${IGNORE}    /tmp/ignored_dir
+    Close Remote Session   r1
+
+Ignore Token Should Skip Remove Remote Directory
+    Open Remote Session    r1    dummy
+    Remove Remote Directory    r1    ${IGNORE}
+    Close Remote Session   r1
+
+Put Remote File Should Store Last Response
+    [Documentation]    Verifies that Put Remote File stores transfer metrics in last_response.
+    Open Remote Session    r1    dummy
+    Put Remote File    r1    ${CURDIR}/fixtures/testfile.txt    /tmp/testfile.txt
+    Memorize Remote Response Field    r1    action    PUT_ACTION
+    Set Remote    r1    $MEM{PUT_ACTION}
+    Verify Remote Response    r1    put_file
+    Close Remote Session   r1

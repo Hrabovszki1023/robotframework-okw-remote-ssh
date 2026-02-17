@@ -6,6 +6,7 @@ from robot.api import logger
 
 
 import os
+import stat
 import yaml
 import time
 
@@ -42,6 +43,13 @@ class RemoteSshLibrary:
     | $IGNORE    | Yes         | Skips execution or verification (PASS, no SSH call)  |
     | $EMPTY     | Yes         | Asserts that the checked field is empty               |
     | $DELETE    | No          | Not implemented in this library                      |
+
+    = File Transfer =
+
+    This library provides SFTP-based file transfer keywords for uploading,
+    downloading, verifying, and removing files and directories on the remote host.
+    All transfer operations are synchronous and store transfer metrics in
+    ``last_response`` (action, bytes, duration_ms, etc.).
 
     = Token Evaluation Order =
 
@@ -196,6 +204,140 @@ class RemoteSshLibrary:
         if field not in resp:
             raise ValueError(f"Unknown response field: {field}")
         return resp[field]
+
+    # -------------------------
+    # SFTP helpers
+    # -------------------------
+    def _open_sftp(self, session_name: str):
+        """Opens an SFTP channel on the paramiko client of the given session."""
+        s = self._ensure_session(session_name)
+        if self._backend == "stub":
+            return None
+        client = s.get("client")
+        if client is None:
+            raise RuntimeError(f"Session '{session_name}' has no paramiko client.")
+        return client.open_sftp()
+
+    def _sftp_put_file(self, sftp, local_path: str, remote_path: str) -> int:
+        """Uploads a single file via SFTP. Returns bytes transferred."""
+        sftp.put(local_path, remote_path)
+        return os.path.getsize(local_path)
+
+    def _sftp_get_file(self, sftp, remote_path: str, local_path: str) -> int:
+        """Downloads a single file via SFTP. Returns bytes transferred."""
+        local_dir = os.path.dirname(local_path)
+        if local_dir and not os.path.exists(local_dir):
+            os.makedirs(local_dir, exist_ok=True)
+        sftp.get(remote_path, local_path)
+        return os.path.getsize(local_path)
+
+    def _sftp_makedirs(self, sftp, remote_dir: str):
+        """Recursively creates remote directories (like mkdir -p)."""
+        if remote_dir in ("", "/"):
+            return
+        try:
+            sftp.stat(remote_dir)
+        except FileNotFoundError:
+            parent = os.path.dirname(remote_dir).replace("\\", "/")
+            self._sftp_makedirs(sftp, parent)
+            sftp.mkdir(remote_dir)
+
+    def _sftp_put_dir(self, sftp, local_dir: str, remote_dir: str):
+        """Recursively uploads a directory. Returns (files, dirs, bytes)."""
+        files_transferred = 0
+        dirs_created = 0
+        bytes_total = 0
+
+        self._sftp_makedirs(sftp, remote_dir)
+        dirs_created += 1
+
+        for root, dirs, files in os.walk(local_dir):
+            rel = os.path.relpath(root, local_dir).replace("\\", "/")
+            if rel == ".":
+                current_remote = remote_dir
+            else:
+                current_remote = f"{remote_dir}/{rel}"
+
+            for d in dirs:
+                rd = f"{current_remote}/{d}"
+                self._sftp_makedirs(sftp, rd)
+                dirs_created += 1
+
+            for f in files:
+                local_file = os.path.join(root, f)
+                remote_file = f"{current_remote}/{f}"
+                b = self._sftp_put_file(sftp, local_file, remote_file)
+                bytes_total += b
+                files_transferred += 1
+
+        return files_transferred, dirs_created, bytes_total
+
+    def _sftp_get_dir(self, sftp, remote_dir: str, local_dir: str):
+        """Recursively downloads a directory. Returns (files, dirs, bytes)."""
+        files_transferred = 0
+        dirs_created = 0
+        bytes_total = 0
+
+        os.makedirs(local_dir, exist_ok=True)
+        dirs_created += 1
+
+        for entry in sftp.listdir_attr(remote_dir):
+            remote_path = f"{remote_dir}/{entry.filename}"
+            local_path = os.path.join(local_dir, entry.filename)
+
+            if stat.S_ISDIR(entry.st_mode):
+                f, d, b = self._sftp_get_dir(sftp, remote_path, local_path)
+                files_transferred += f
+                dirs_created += d
+                bytes_total += b
+            else:
+                local_parent = os.path.dirname(local_path)
+                if local_parent and not os.path.exists(local_parent):
+                    os.makedirs(local_parent, exist_ok=True)
+                sftp.get(remote_path, local_path)
+                bytes_total += os.path.getsize(local_path)
+                files_transferred += 1
+
+        return files_transferred, dirs_created, bytes_total
+
+    def _sftp_stat(self, sftp, remote_path: str):
+        """Returns stat result or None if path does not exist."""
+        try:
+            return sftp.stat(remote_path)
+        except FileNotFoundError:
+            return None
+
+    def _sftp_remove_file(self, sftp, remote_path: str):
+        """Removes a single remote file."""
+        sftp.remove(remote_path)
+
+    def _sftp_remove_dir(self, sftp, remote_dir: str, recursive: bool = True):
+        """Removes a remote directory. If recursive, removes all contents first."""
+        if recursive:
+            for entry in sftp.listdir_attr(remote_dir):
+                child = f"{remote_dir}/{entry.filename}"
+                if stat.S_ISDIR(entry.st_mode):
+                    self._sftp_remove_dir(sftp, child, recursive=True)
+                else:
+                    sftp.remove(child)
+        sftp.rmdir(remote_dir)
+
+    def _log_transfer(self, response: dict):
+        """ASR logging for transfer keywords."""
+        parts = [f"action: {response.get('action', '?')}"]
+        for key in ["local_path", "remote_path", "local_dir", "remote_dir"]:
+            if key in response:
+                parts.append(f"{key}: {response[key]}")
+        if "bytes" in response:
+            parts.append(f"bytes: {response['bytes']}")
+        if "bytes_total" in response:
+            parts.append(f"bytes_total: {response['bytes_total']}")
+        if "files_transferred" in response:
+            parts.append(f"files_transferred: {response['files_transferred']}")
+        if "dirs_created" in response:
+            parts.append(f"dirs_created: {response['dirs_created']}")
+        parts.append(f"duration_ms: {response.get('duration_ms', 0)}")
+        logger.info("\n".join(parts))
 
     # -------------------------
     # Session lifecycle
@@ -789,3 +931,468 @@ class RemoteSshLibrary:
         if field not in resp:
             raise ValueError(f"Unknown response field: {field}")
         self._store[key] = resp[field]
+
+    # -------------------------
+    # File Transfer – Upload / Download
+    # -------------------------
+    @keyword("Put Remote File")
+    def put_remote_file(self, session_name: str, local_path: str, remote_path: str):
+        """Uploads a local file to the remote host via SFTP.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``local_path``: Path to the local file. Supports ``$MEM{KEY}`` expansion.
+        - ``remote_path``: Destination path on the remote host.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in both path parameters.
+        - If either expanded path is ``$IGNORE``: no transfer occurs (PASS).
+        - Creates remote parent directories if they do not exist.
+        - Stores transfer metrics in ``last_response``:
+          ``action``, ``local_path``, ``remote_path``, ``bytes``, ``duration_ms``.
+        - Fails if the local file does not exist or the SFTP transfer fails.
+
+        Example (``put_remote_file.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Upload Artifact To Build Server
+        |     Open Remote Session      r1    buildserver01
+        |     Put Remote File          r1    ${CURDIR}/artifact.zip    /tmp/artifact.zip
+        |     Verify Remote File Exists    r1    /tmp/artifact.zip
+        |     Close Remote Session     r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded_local = expand_mem(local_path, self._store)
+        expanded_remote = expand_mem(remote_path, self._store)
+
+        if self._check_ignore(expanded_local) or self._check_ignore(expanded_remote):
+            return s.get("last_response")
+
+        start = time.time()
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                # Ensure remote parent dir exists
+                remote_parent = os.path.dirname(expanded_remote).replace("\\", "/")
+                if remote_parent:
+                    self._sftp_makedirs(sftp, remote_parent)
+                transferred = self._sftp_put_file(sftp, expanded_local, expanded_remote)
+            finally:
+                sftp.close()
+        else:
+            # stub: simulate transfer
+            if not os.path.exists(expanded_local):
+                raise FileNotFoundError(f"Local file not found: {expanded_local}")
+            transferred = os.path.getsize(expanded_local)
+
+        dur_ms = int((time.time() - start) * 1000)
+
+        response = {
+            "action": "put_file",
+            "local_path": expanded_local,
+            "remote_path": expanded_remote,
+            "bytes": transferred,
+            "duration_ms": dur_ms,
+        }
+        s["last_response"] = response
+        self._log_transfer(response)
+
+        return response
+
+    @keyword("Get Remote File")
+    def get_remote_file(self, session_name: str, remote_path: str, local_path: str):
+        """Downloads a file from the remote host to the local filesystem via SFTP.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_path``: Path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``local_path``: Local destination path. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in both path parameters.
+        - If either expanded path is ``$IGNORE``: no transfer occurs (PASS).
+        - Creates local parent directories if they do not exist.
+        - Stores transfer metrics in ``last_response``:
+          ``action``, ``remote_path``, ``local_path``, ``bytes``, ``duration_ms``.
+        - Fails if the remote file does not exist or the SFTP transfer fails.
+
+        Example (``get_remote_file.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Download Application Log
+        |     Open Remote Session      r1    appserver
+        |     Get Remote File          r1    /var/log/app.log    ${OUTPUTDIR}/app.log
+        |     Close Remote Session     r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded_remote = expand_mem(remote_path, self._store)
+        expanded_local = expand_mem(local_path, self._store)
+
+        if self._check_ignore(expanded_remote) or self._check_ignore(expanded_local):
+            return s.get("last_response")
+
+        start = time.time()
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                transferred = self._sftp_get_file(sftp, expanded_remote, expanded_local)
+            finally:
+                sftp.close()
+        else:
+            # stub: simulate transfer
+            transferred = 0
+
+        dur_ms = int((time.time() - start) * 1000)
+
+        response = {
+            "action": "get_file",
+            "remote_path": expanded_remote,
+            "local_path": expanded_local,
+            "bytes": transferred,
+            "duration_ms": dur_ms,
+        }
+        s["last_response"] = response
+        self._log_transfer(response)
+
+        return response
+
+    @keyword("Put Remote Directory")
+    def put_remote_directory(self, session_name: str, local_dir: str, remote_dir: str):
+        """Recursively uploads a local directory to the remote host via SFTP.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``local_dir``: Path to the local directory. Supports ``$MEM{KEY}`` expansion.
+        - ``remote_dir``: Destination directory on the remote host.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in both path parameters.
+        - If either expanded path is ``$IGNORE``: no transfer occurs (PASS).
+        - Mirrors the directory structure recursively (all files and subdirectories).
+        - Stores transfer metrics in ``last_response``:
+          ``action``, ``local_dir``, ``remote_dir``, ``files_transferred``,
+          ``dirs_created``, ``bytes_total``, ``duration_ms``.
+        - Fails if the local directory does not exist or the SFTP transfer fails.
+
+        Example (``put_remote_directory.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Deploy Application To Server
+        |     Open Remote Session        r1    appserver
+        |     Put Remote Directory       r1    ${CURDIR}/dist    /opt/app/dist
+        |     Verify Remote Directory Exists    r1    /opt/app/dist
+        |     Close Remote Session       r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded_local = expand_mem(local_dir, self._store)
+        expanded_remote = expand_mem(remote_dir, self._store)
+
+        if self._check_ignore(expanded_local) or self._check_ignore(expanded_remote):
+            return s.get("last_response")
+
+        start = time.time()
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                files, dirs, total_bytes = self._sftp_put_dir(sftp, expanded_local, expanded_remote)
+            finally:
+                sftp.close()
+        else:
+            # stub: simulate transfer
+            if not os.path.isdir(expanded_local):
+                raise FileNotFoundError(f"Local directory not found: {expanded_local}")
+            files, dirs, total_bytes = 0, 0, 0
+            for root, dirnames, filenames in os.walk(expanded_local):
+                dirs += len(dirnames)
+                files += len(filenames)
+                for fn in filenames:
+                    total_bytes += os.path.getsize(os.path.join(root, fn))
+            dirs += 1  # root dir
+
+        dur_ms = int((time.time() - start) * 1000)
+
+        response = {
+            "action": "put_dir",
+            "local_dir": expanded_local,
+            "remote_dir": expanded_remote,
+            "files_transferred": files,
+            "dirs_created": dirs,
+            "bytes_total": total_bytes,
+            "duration_ms": dur_ms,
+        }
+        s["last_response"] = response
+        self._log_transfer(response)
+
+        return response
+
+    @keyword("Get Remote Directory")
+    def get_remote_directory(self, session_name: str, remote_dir: str, local_dir: str):
+        """Recursively downloads a remote directory to the local filesystem via SFTP.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``local_dir``: Local destination directory. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in both path parameters.
+        - If either expanded path is ``$IGNORE``: no transfer occurs (PASS).
+        - Mirrors the remote directory structure recursively.
+        - Creates local parent directories if they do not exist.
+        - Stores transfer metrics in ``last_response``:
+          ``action``, ``remote_dir``, ``local_dir``, ``files_transferred``,
+          ``dirs_created``, ``bytes_total``, ``duration_ms``.
+        - Fails if the remote directory does not exist or the SFTP transfer fails.
+
+        Example (``get_remote_directory.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Download Remote Logs
+        |     Open Remote Session        r1    logserver
+        |     Get Remote Directory       r1    /var/log/app    ${OUTPUTDIR}/logs
+        |     Close Remote Session       r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded_remote = expand_mem(remote_dir, self._store)
+        expanded_local = expand_mem(local_dir, self._store)
+
+        if self._check_ignore(expanded_remote) or self._check_ignore(expanded_local):
+            return s.get("last_response")
+
+        start = time.time()
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                files, dirs, total_bytes = self._sftp_get_dir(sftp, expanded_remote, expanded_local)
+            finally:
+                sftp.close()
+        else:
+            # stub: simulate transfer
+            files, dirs, total_bytes = 0, 0, 0
+
+        dur_ms = int((time.time() - start) * 1000)
+
+        response = {
+            "action": "get_dir",
+            "remote_dir": expanded_remote,
+            "local_dir": expanded_local,
+            "files_transferred": files,
+            "dirs_created": dirs,
+            "bytes_total": total_bytes,
+            "duration_ms": dur_ms,
+        }
+        s["last_response"] = response
+        self._log_transfer(response)
+
+        return response
+
+    # -------------------------
+    # File Transfer – Verify
+    # -------------------------
+    @keyword("Verify Remote File Exists")
+    def verify_remote_file_exists(self, session_name: str, remote_path: str):
+        """Verifies that a file exists on the remote host.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_path``: Path on the remote host. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in the path parameter.
+        - If the expanded path is ``$IGNORE``: verification is skipped (PASS).
+        - Checks via SFTP ``stat()`` that the file exists and is a regular file.
+        - Fails with ``AssertionError`` if the file does not exist.
+
+        Example (``verify_remote_file_exists.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Artifact Was Uploaded Successfully
+        |     Open Remote Session          r1    buildserver01
+        |     Put Remote File              r1    ${CURDIR}/artifact.zip    /tmp/artifact.zip
+        |     Verify Remote File Exists    r1    /tmp/artifact.zip
+        |     Close Remote Session         r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded = expand_mem(remote_path, self._store)
+        if self._check_ignore(expanded):
+            return
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                st = self._sftp_stat(sftp, expanded)
+                if st is None:
+                    raise AssertionError(f"Remote file does not exist: {expanded}")
+                if stat.S_ISDIR(st.st_mode):
+                    raise AssertionError(f"Remote path exists but is a directory, not a file: {expanded}")
+            finally:
+                sftp.close()
+        else:
+            # stub: always passes
+            logger.info(f"STUB: Verify Remote File Exists -> {expanded}")
+
+    @keyword("Verify Remote Directory Exists")
+    def verify_remote_directory_exists(self, session_name: str, remote_dir: str):
+        """Verifies that a directory exists on the remote host.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory path on the remote host.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in the path parameter.
+        - If the expanded path is ``$IGNORE``: verification is skipped (PASS).
+        - Checks via SFTP ``stat()`` that the directory exists and is a directory.
+        - Fails with ``AssertionError`` if the directory does not exist.
+
+        Example (``verify_remote_directory_exists.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Application Directory Was Created
+        |     Open Remote Session               r1    appserver
+        |     Put Remote Directory              r1    ${CURDIR}/dist    /opt/app/dist
+        |     Verify Remote Directory Exists    r1    /opt/app/dist
+        |     Close Remote Session              r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded = expand_mem(remote_dir, self._store)
+        if self._check_ignore(expanded):
+            return
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                st = self._sftp_stat(sftp, expanded)
+                if st is None:
+                    raise AssertionError(f"Remote directory does not exist: {expanded}")
+                if not stat.S_ISDIR(st.st_mode):
+                    raise AssertionError(f"Remote path exists but is a file, not a directory: {expanded}")
+            finally:
+                sftp.close()
+        else:
+            # stub: always passes
+            logger.info(f"STUB: Verify Remote Directory Exists -> {expanded}")
+
+    # -------------------------
+    # File Transfer – Remove
+    # -------------------------
+    @keyword("Remove Remote File")
+    def remove_remote_file(self, session_name: str, remote_path: str):
+        """Removes a file on the remote host via SFTP.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_path``: Path of the file to remove on the remote host.
+          Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in the path parameter.
+        - If the expanded path is ``$IGNORE``: no action is taken (PASS).
+        - Removes the specified file via SFTP.
+        - Fails if the file does not exist or the SFTP operation fails.
+
+        Example (``remove_remote_file.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Upload And Cleanup
+        |     Open Remote Session      r1    buildserver01
+        |     Put Remote File          r1    ${CURDIR}/tmp.dat    /tmp/tmp.dat
+        |     Verify Remote File Exists    r1    /tmp/tmp.dat
+        |     Remove Remote File       r1    /tmp/tmp.dat
+        |     Close Remote Session     r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded = expand_mem(remote_path, self._store)
+        if self._check_ignore(expanded):
+            return
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                self._sftp_remove_file(sftp, expanded)
+            finally:
+                sftp.close()
+        else:
+            # stub: log only
+            logger.info(f"STUB: Remove Remote File -> {expanded}")
+
+    @keyword("Remove Remote Directory")
+    def remove_remote_directory(self, session_name: str, remote_dir: str, recursive: str = "True"):
+        """Removes a directory on the remote host via SFTP.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Path of the directory to remove on the remote host.
+          Supports ``$MEM{KEY}`` expansion.
+        - ``recursive``: If ``True`` (default), removes directory and all contents
+          recursively. If ``False``, only removes if the directory is empty.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` in the path parameter.
+        - If the expanded path is ``$IGNORE``: no action is taken (PASS).
+        - If ``recursive=True``: removes all files and subdirectories first,
+          then removes the directory itself.
+        - If ``recursive=False``: fails if the directory is not empty.
+        - Fails if the directory does not exist or the SFTP operation fails.
+
+        Example (``remove_remote_directory.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Deploy And Cleanup Old Version
+        |     Open Remote Session         r1    appserver
+        |     Remove Remote Directory     r1    /opt/app/old_dist
+        |     Put Remote Directory        r1    ${CURDIR}/dist    /opt/app/dist
+        |     Close Remote Session        r1
+        |
+        | Remove Empty Directory Only
+        |     Open Remote Session         r1    appserver
+        |     Remove Remote Directory     r1    /tmp/empty_dir    recursive=False
+        |     Close Remote Session        r1
+        """
+        s = self._ensure_session(session_name)
+
+        expanded = expand_mem(remote_dir, self._store)
+        if self._check_ignore(expanded):
+            return
+
+        is_recursive = str(recursive).strip().lower() in ("true", "1", "yes")
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                self._sftp_remove_dir(sftp, expanded, recursive=is_recursive)
+            finally:
+                sftp.close()
+        else:
+            # stub: log only
+            logger.info(f"STUB: Remove Remote Directory -> {expanded} (recursive={is_recursive})")
