@@ -23,7 +23,7 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 | Keyword | Parameters | Description |
 |---------|-----------|-------------|
 | `Verify Remote Response` | `<session>` `<expected>` | EXACT match on `stdout` |
-| `Verify Remote Response WCM` | `<session>` `<pattern>` | Wildcard/contains match on `stdout` |
+| `Verify Remote Response WCM` | `<session>` `<pattern>` | Wildcard pattern match on `stdout` (`*` = any chars, `?` = one char) |
 | `Verify Remote Response REGX` | `<session>` `<regex>` | Regex match on `stdout` |
 
 ### Verification – stderr
@@ -31,7 +31,7 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 | Keyword | Parameters | Default | Description |
 |---------|-----------|---------|-------------|
 | `Verify Remote Stderr` | `<session>` `[expected]` | `$EMPTY` | EXACT match on `stderr`. Without `expected`: asserts stderr is empty. |
-| `Verify Remote Stderr WCM` | `<session>` `[pattern]` | `$EMPTY` | Wildcard/contains match on `stderr` |
+| `Verify Remote Stderr WCM` | `<session>` `[pattern]` | `$EMPTY` | Wildcard pattern match on `stderr` (`*` = any chars, `?` = one char) |
 | `Verify Remote Stderr REGX` | `<session>` `[regex]` | `$EMPTY` | Regex match on `stderr` |
 
 ### Verification – exit_code / duration
@@ -63,13 +63,18 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 | `Verify Remote File Exists` | `<session>` `<remote_path>` | Asserts that a file exists on the remote host |
 | `Verify Remote Directory Exists` | `<session>` `<remote_dir>` | Asserts that a directory exists on the remote host |
 
-### File Transfer – Remove
+### File Transfer – Remove (idempotent)
+
+All remove keywords are **idempotent**: if the target does not exist, they log
+an info message and return PASS (the target state "absent" is already reached).
+Use `Verify Remote File Exists` / `Verify Remote Directory Exists` to
+explicitly assert presence or absence.
 
 | Keyword | Parameters | Description |
 |---------|-----------|-------------|
-| `Remove Remote File` | `<session>` `<remote_path>` | Removes a file on the remote host |
-| `Remove Remote Directory` | `<session>` `<remote_dir>` | Removes an empty directory on the remote host |
-| `Remove Remote Directory Recursively` | `<session>` `<remote_dir>` | Removes a directory and all its contents |
+| `Remove Remote File` | `<session>` `<remote_path>` | Removes a file (idempotent) |
+| `Remove Remote Directory` | `<session>` `<remote_dir>` | Removes an empty directory (idempotent) |
+| `Remove Remote Directory Recursively` | `<session>` `<remote_dir>` | Removes a directory and all its contents (idempotent) |
 
 ## File Transfer Details
 
@@ -97,7 +102,6 @@ File transfer keywords store transfer metrics in `last_response`:
 - SFTP errors (IO, permission, path not found) cause immediate **FAIL**.
 - Remote parent directories are created automatically (like `mkdir -p`).
 - `Remove Remote Directory` only removes empty directories; use `Remove Remote Directory Recursively` for non-empty directories.
-- All remove keywords are **idempotent**: if the target does not exist, they log an info message and return PASS (the target state "absent" is already reached). Use `Verify Remote File Exists` / `Verify Remote Directory Exists` to explicitly assert presence or absence.
 
 ## OKW Global Tokens
 
