@@ -142,6 +142,64 @@ Set Remote And Continue Should Not Fail On Nonzero Exit
     Verify Remote Exit Code    r1    0
     Close Remote Session   r1
 
+# ---- Negative Tests: wrong expected value must FAIL ----
+
+Verify Response Should Fail On Mismatch
+    [Documentation]    EXACT match with wrong expected value must raise error.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    hello world
+    Run Keyword And Expect Error    *    Verify Remote Response    r1    wrong value
+    Close Remote Session   r1
+
+Verify Response WCM Should Fail On Mismatch
+    [Documentation]    Wildcard pattern that does not match must raise error.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    hello world
+    Run Keyword And Expect Error    *    Verify Remote Response WCM    r1    *xyz*
+    Close Remote Session   r1
+
+Verify Response REGX Should Fail On Mismatch
+    [Documentation]    Regex that does not match must raise error.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    hello world
+    Run Keyword And Expect Error    *    Verify Remote Response REGX    r1    ^\\d+$
+    Close Remote Session   r1
+
+Verify Stderr Should Fail On Mismatch
+    [Documentation]    Stub stderr is empty; expecting non-empty text must fail.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    abc
+    Run Keyword And Expect Error    *    Verify Remote Stderr    r1    some error text
+    Close Remote Session   r1
+
+Verify Stderr WCM Should Fail On Mismatch
+    [Documentation]    Stub stderr is empty; wildcard pattern must fail.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    abc
+    Run Keyword And Expect Error    *    Verify Remote Stderr WCM    r1    *error*
+    Close Remote Session   r1
+
+Verify Stderr REGX Should Fail On Mismatch
+    [Documentation]    Stub stderr is empty; regex expecting content must fail.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    abc
+    Run Keyword And Expect Error    *    Verify Remote Stderr REGX    r1    .+
+    Close Remote Session   r1
+
+Verify Exit Code Should Fail On Mismatch
+    [Documentation]    Stub exit_code is 0; expecting 1 must fail.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    abc
+    Run Keyword And Expect Error    *    Verify Remote Exit Code    r1    1
+    Close Remote Session   r1
+
+Verify Duration Should Fail On Mismatch
+    [Documentation]    Stub duration_ms is 0; expecting >=9999 must fail.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    abc
+    Run Keyword And Expect Error    *    Verify Remote Duration    r1    >=9999
+    Close Remote Session   r1
+
 # ---- File Transfer Keywords ----
 
 Put Remote File Should Work
