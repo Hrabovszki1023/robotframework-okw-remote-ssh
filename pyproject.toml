@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "robotframework-okw-remote-ssh"
-version = "0.1.0"
+version = "0.1.1"
 description = "Standalone Robot Framework library for deterministic remote interaction via SSH."
 authors = [{ name = "Zoltán Hrabovszki" }]
 readme = "README.md"
@@ -14,7 +14,7 @@ dependencies = [
   "robotframework>=6.0",
   "paramiko>=3.4.0",
   "PyYAML>=6.0",
-  "okw-contract-utils>=0.1.0",
+  "okw-contract-utils>=0.1.1",
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
