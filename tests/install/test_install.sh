@@ -37,8 +37,8 @@ pip list | grep -iE "okw|robot|paramiko|pyyaml"
 echo ""
 echo "[4/6] Verifying Python import..."
 python3 -c "
-from robotframework_okw_remote_ssh.library import OkwRemoteSsh
-lib = OkwRemoteSsh()
+from robotframework_okw_remote_ssh.library import RemoteSshLibrary
+lib = RemoteSshLibrary()
 print(f'  Library class: {lib.__class__.__name__}')
 print(f'  Backend:       {lib._backend}')
 print('  Import OK')
