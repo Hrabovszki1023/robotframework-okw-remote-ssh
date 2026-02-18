@@ -465,6 +465,12 @@ class RemoteSshLibrary:
     def _sftp_remove_file(self, sftp, remote_path: str):
         """Removes a single remote file."""
         sftp.remove(remote_path)
+        msg = "\n".join([
+            self._fmt_block("command", "SFTP remove()"),
+            self._fmt_block("path", remote_path),
+            "result: removed",
+        ])
+        logger.info(msg)
 
     def _sftp_remove_dir(self, sftp, remote_dir: str, recursive: bool = True):
         """Removes a remote directory. If recursive, removes all contents first."""
@@ -475,7 +481,9 @@ class RemoteSshLibrary:
                     self._sftp_remove_dir(sftp, child, recursive=True)
                 else:
                     sftp.remove(child)
+                    logger.info(f"SFTP remove(): {child}")
         sftp.rmdir(remote_dir)
+        logger.info(f"SFTP rmdir(): {remote_dir}")
 
     def _sftp_clear_dir(self, sftp, remote_dir: str, recursive: bool):
         """Deletes all files in a directory, keeps directory structure.
@@ -491,6 +499,7 @@ class RemoteSshLibrary:
                     files_removed += self._sftp_clear_dir(sftp, child, recursive=True)
             else:
                 sftp.remove(child)
+                logger.info(f"SFTP remove(): {child}")
                 files_removed += 1
         return files_removed
 
@@ -1533,6 +1542,14 @@ class RemoteSshLibrary:
                 file_exists = st is not None and not stat.S_ISDIR(st.st_mode)
             finally:
                 sftp.close()
+            actual = "YES" if file_exists else "NO"
+            msg = "\n".join([
+                self._fmt_block("command", "SFTP stat()"),
+                self._fmt_block("path", expanded),
+                f"exists: {actual}",
+                f"expected: {yes_no.value}",
+            ])
+            logger.info(msg)
         else:
             # stub: simulate based on YES/NO expectation (always matches)
             file_exists = (yes_no.value == "YES")
@@ -1590,6 +1607,14 @@ class RemoteSshLibrary:
                 dir_exists = st is not None and stat.S_ISDIR(st.st_mode)
             finally:
                 sftp.close()
+            actual = "YES" if dir_exists else "NO"
+            msg = "\n".join([
+                self._fmt_block("command", "SFTP stat()"),
+                self._fmt_block("path", expanded),
+                f"exists: {actual}",
+                f"expected: {yes_no.value}",
+            ])
+            logger.info(msg)
         else:
             # stub: simulate based on YES/NO expectation (always matches)
             dir_exists = (yes_no.value == "YES")

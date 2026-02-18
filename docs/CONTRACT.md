@@ -156,6 +156,107 @@ Missing keys cause FAIL (no silent fallback).
 
 ## ASR Logging
 
-`Execute Remote` / `Execute Remote And Continue` log in the same keyword step:
-- `command`, `stdout`, `stderr`, `exit_code`, `duration_ms`
-- stdout/stderr are normalized (`\r\n` → `\n`, rstrip) before storing/logging.
+Alle Keywords loggen ihre Aktionen und Ergebnisse im Robot Framework Log (`log.html`).
+Die Ausgaben sind mehrzeilig und folgen einem festen Format pro Keyword-Kategorie.
+
+### Execution Keywords
+
+`Execute Remote` / `Execute Remote And Continue` loggen:
+
+```
+command:
+<der ausgefuehrte Befehl>
+stdout:
+<Standardausgabe>
+stderr:
+<Fehlerausgabe>
+exit_code: <0|1|...>
+duration_ms: <Dauer in Millisekunden>
+```
+
+- stdout/stderr werden normalisiert (`\r\n` → `\n`, rstrip) bevor sie gespeichert und geloggt werden.
+
+### SFTP Verify Keywords
+
+`Verify Remote File Exists` / `Verify Remote Directory Exists` loggen:
+
+```
+command:
+SFTP stat()
+path:
+<der geprueft Pfad>
+exists: <YES|NO>
+expected: <YES|NO>
+```
+
+- `command`: Die SFTP-Operation (`stat()`) die ausgefuehrt wird.
+- `path`: Der geprueft Remote-Pfad.
+- `exists`: **Ist-Wert** – was SFTP tatsaechlich auf dem Server gefunden hat.
+- `expected`: **Soll-Wert** – was der Testfall erwartet.
+
+### SFTP Remove Keywords
+
+`Remove Remote File` loggt:
+
+```
+command:
+SFTP remove()
+path:
+<der geloeschte Pfad>
+result: removed
+```
+
+`Remove Remote Directory Recursively` loggt pro Eintrag:
+
+```
+SFTP remove(): <Dateipfad>
+SFTP rmdir(): <Verzeichnispfad>
+```
+
+Wenn das Ziel nicht existiert (idempotent):
+
+```
+File does not exist (already absent): <Pfad>
+Directory does not exist (already absent): <Pfad>
+```
+
+### SFTP Clear Keywords
+
+`Clear Remote Directory` / `Clear Remote Directory Recursively` loggen pro geloeschte Datei:
+
+```
+SFTP remove(): <Dateipfad>
+```
+
+Danach die Transfer-Zusammenfassung (via `last_response`):
+
+```
+action: clear_dir | clear_dir_recursive
+remote_dir: <Pfad>
+files_removed: <Anzahl>
+duration_ms: <Dauer>
+```
+
+### SFTP Transfer Keywords
+
+`Put Remote File` / `Get Remote File` loggen:
+
+```
+action: put_file | get_file
+local_path: <lokaler Pfad>
+remote_path: <Remote-Pfad>
+bytes: <Anzahl Bytes>
+duration_ms: <Dauer>
+```
+
+`Put Remote Directory` / `Get Remote Directory` loggen:
+
+```
+action: put_dir | get_dir
+local_dir: <lokales Verzeichnis>
+remote_dir: <Remote-Verzeichnis>
+bytes_total: <Gesamtbytes>
+files_transferred: <Anzahl Dateien>
+dirs_created: <Anzahl Verzeichnisse>
+duration_ms: <Dauer>
+```
