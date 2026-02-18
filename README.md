@@ -12,11 +12,26 @@ automation (Linux, macOS, Windows with OpenSSH).
 
 - **Session-based** SSH connections via Paramiko
 - **Strict separation** of execution and verification
+- **Command queuing**: `Set Remote` collects commands, `Execute Remote` sends them in one SSH call (preserves shell context)
 - **Three match modes**: EXACT, WCM (wildcard: `*`, `?`), REGX (regex)
 - **SFTP file transfer**: upload, download, verify, clear, remove (files and directories)
 - **OKW token support**: `$IGNORE` (skip), `$EMPTY` (assert empty)
 - **Value expansion**: `$MEM{KEY}` placeholders across all parameters
 - **No GUI coupling**, no dependency on OKW Core
+
+## Drei-Phasen-Modell
+
+Alle Keywords folgen einem festen Zusammenspiel:
+
+| Phase | Keywords | Aufgabe |
+|-------|----------|---------|
+| **Vorbereiten** | `Set Remote` | Kommandos sammeln (kein SSH-Aufruf) |
+| **Ausführen** | `Execute Remote`, `Execute Remote And Continue` | Kommandos absenden, Ergebnis speichern |
+| **Prüfen** | `Verify Remote Response`, `Verify Remote Stderr`, `Verify Remote Exit Code`, ... | Gespeichertes Ergebnis auswerten |
+
+> **Hinweis:** *Vorbereiten* ist optional – `Execute Remote` kann auch direkt mit einem Kommando aufgerufen werden.
+> Werden mehrere `Set Remote` gesammelt, baut `Execute Remote` sie mit `&&` zusammen und schickt sie als **einen** SSH-Aufruf.
+> So bleibt der Shell-Kontext (Arbeitsverzeichnis, Variablen) erhalten.
 
 ## Installation
 
@@ -30,32 +45,45 @@ pip install robotframework-okw-remote-ssh
 *** Settings ***
 Library    robotframework_okw_remote_ssh.RemoteSshLibrary
 
-*** Variables ***
-${IGNORE}    $IGNORE
-
 *** Test Cases ***
-Execute Remote Command And Verify
-    Open Remote Session    myhost    my_server
-    Set Remote             myhost    echo Hello
-    Verify Remote Response    myhost    Hello
-    Verify Remote Stderr   myhost
-    Verify Remote Exit Code    myhost    0
-    Close Remote Session   myhost
+Single Command
+    Open Remote Session      myhost    my_server
+    Execute Remote           myhost    echo Hello
+    Verify Remote Response   myhost    Hello
+    Close Remote Session     myhost
+
+Multi Command With Context
+    Open Remote Session          myhost    my_server
+    Set Remote                   myhost    cd /opt/app
+    Set Remote                   myhost    ls -la
+    Execute Remote               myhost
+    Verify Remote Response WCM   myhost    *app*
+    Close Remote Session         myhost
+
+Tolerate Expected Errors
+    Open Remote Session              myhost    my_server
+    Execute Remote And Continue      myhost    cat /no/such/file
+    Verify Remote Exit Code          myhost    1
+    Verify Remote Stderr WCM         myhost    *No such file*
+    Close Remote Session             myhost
 ```
 
 ## Session Configuration
 
-Sessions are configured via YAML files in `~/.okw/configs/` (or a custom config directory).
+Sessions are configured via YAML files in `remotes/` (or a custom config directory).
 
-Example `~/.okw/configs/my_server.yaml`:
+Example `remotes/my_server.yaml`:
 
 ```yaml
 host: 10.0.0.1
 port: 22
 username: testuser
+auth:
+  type: password
+  secret_id: "my_server/testuser"
 ```
 
-Passwords and keys are stored separately in `~/.okw/secrets.yaml` (never in the repository).
+Passwords are stored separately in `~/.okw/secrets.yaml` (never in the repository).
 
 ## Keywords
 
@@ -70,8 +98,9 @@ Passwords and keys are stored separately in `~/.okw/secrets.yaml` (never in the 
 
 | Keyword | Description |
 |---------|-------------|
-| `Set Remote` | Executes a command via SSH. FAIL on `exit_code != 0` |
-| `Set Remote And Continue` | Executes a command. Never fails on nonzero exit code |
+| `Set Remote` | Queues a command for later execution (no SSH call). Supports `$MEM{KEY}` expansion. |
+| `Execute Remote` | With command: executes immediately. Without: joins all queued `Set Remote` commands with `&&` and executes. FAIL on `exit_code != 0`. |
+| `Execute Remote And Continue` | Same as `Execute Remote`, but never fails on nonzero exit code. |
 
 ### Verification -- stdout
 

@@ -25,8 +25,39 @@ class RemoteSshLibrary:
 
     This library provides session-based remote command execution and structured
     verification keywords. It follows the OKW contract-first design: action
-    keywords (``Set Remote``) write to ``last_response``, verification keywords
-    read from it.
+    keywords (``Execute Remote``) write to ``last_response``, verification
+    keywords read from it.
+
+    = Drei-Phasen-Modell =
+
+    Alle Schlüsselwörter dieser Bibliothek arbeiten nach einem festen
+    Drei-Phasen-Prinzip zusammen:
+
+    | *Phase*       | *Schlüsselwörter*                                       | *Aufgabe*                                    |
+    | Vorbereiten   | ``Set Remote``                                          | Kommandos sammeln (kein SSH-Aufruf)          |
+    | Ausführen     | ``Execute Remote``, ``Execute Remote And Continue``     | Kommandos absenden und Ergebnis speichern    |
+    | Prüfen        | ``Verify Remote Response``, ``Verify Remote Stderr``, ``Verify Remote Exit Code``, ... | Gespeichertes Ergebnis auswerten |
+
+    *Vorbereiten* ist optional – ``Execute Remote`` kann auch direkt mit einem
+    Kommando aufgerufen werden. Werden mehrere ``Set Remote`` gesammelt, baut
+    ``Execute Remote`` sie mit ``&&`` zusammen und schickt sie als einen
+    SSH-Aufruf. So bleibt der Shell-Kontext (Arbeitsverzeichnis, Variablen)
+    über mehrere Kommandos hinweg erhalten.
+
+    *Ausführen* schreibt das Ergebnis (stdout, stderr, exit_code, duration_ms)
+    in ``last_response``. Erst danach können die *Prüfen*-Schlüsselwörter
+    darauf zugreifen.
+
+    Beispiel für alle drei Phasen:
+
+    | # Vorbereiten
+    | Set Remote                   r1    cd /opt/app
+    | Set Remote                   r1    ls -la
+    | # Ausführen
+    | Execute Remote               r1
+    | # Prüfen
+    | Verify Remote Response WCM   r1    *app*
+    | Verify Remote Exit Code      r1    0
 
     = Session Management =
 
@@ -130,6 +161,38 @@ class RemoteSshLibrary:
     | Passwörter werden nur im Arbeitsspeicher gehalten, niemals geloggt.                 |
     | Enthält die Remote-YAML ein password-Feld, wird sofort ein Fehler ausgelöst.        |
 
+    = Command Execution =
+
+    Commands can be executed in two ways:
+
+    *Single command* – ``Execute Remote`` with a command parameter sends one
+    command immediately via SSH:
+
+    | Execute Remote    r1    whoami
+
+    *Queued commands* – ``Set Remote`` collects commands in an internal queue.
+    Calling ``Execute Remote`` without a command parameter joins all queued
+    entries with ``&&`` and sends them as a single SSH call. This preserves
+    shell context (working directory, variables) across multiple commands:
+
+    | Set Remote        r1    cd /opt/app
+    | Set Remote        r1    ls -la
+    | Execute Remote    r1
+
+    This executes ``cd /opt/app && ls -la`` in one SSH channel.
+
+    *Tolerant execution* – ``Execute Remote And Continue`` works exactly like
+    ``Execute Remote`` (single or queued), but never fails on a nonzero exit
+    code. This is useful for commands that are expected to fail:
+
+    | Execute Remote And Continue    r1    cat /no/such/file
+    | Verify Remote Exit Code        r1    1
+
+    | *Keyword*                       | *Verhalten*                                                          |
+    | ``Set Remote``                  | Sammelt ein Kommando in der Queue (kein SSH-Aufruf)                  |
+    | ``Execute Remote``              | Mit Kommando: sofortige Ausführung. Ohne: Queue zusammenbauen und ausführen |
+    | ``Execute Remote And Continue`` | Wie ``Execute Remote``, aber kein FAIL bei exit_code != 0            |
+
     = Value Expansion =
 
     All command, expected, and expr parameters support ``$MEM{KEY}`` expansion.
@@ -159,7 +222,7 @@ class RemoteSshLibrary:
     = Examples =
 
     | Open Remote Session    | r1    | myserver        |
-    | Set Remote             | r1    | whoami          |
+    | Execute Remote         | r1    | whoami          |
     | Verify Remote Response | r1    | expecteduser    |
     | Close Remote Session   | r1    |                 |
     """
@@ -198,7 +261,7 @@ class RemoteSshLibrary:
         s = self._ensure_session(session_name)
         resp = s.get("last_response")
         if not resp:
-            raise ValueError(f"Session '{session_name}' has no last_response. Call 'Set Remote' first.")
+            raise ValueError(f"Session '{session_name}' has no last_response. Call 'Execute Remote' first.")
         return resp
 
     def _load_connection(self, config_ref: str) -> dict:
@@ -504,7 +567,7 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Connect To Build Server
         |     Open Remote Session     r1    buildserver01
-        |     Set Remote              r1    whoami
+        |     Execute Remote           r1    whoami
         |     Verify Remote Response  r1    jenkins
         |     Close Remote Session    r1
         """
@@ -523,6 +586,7 @@ class RemoteSshLibrary:
             "connected": True,
             "client": client,          # <-- IMPORTANT
             "last_response": None,
+            "command_queue": [],
         }
 
     @keyword("Close Remote Session")
@@ -544,7 +608,7 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Session Lifecycle
         |     Open Remote Session     r1    myserver
-        |     Set Remote              r1    uptime
+        |     Execute Remote           r1    uptime
         |     Verify Remote Response  r1    up
         |     Close Remote Session    r1
         """
@@ -562,11 +626,74 @@ class RemoteSshLibrary:
     # -------------------------
     @keyword("Set Remote")
     def set_remote(self, session_name: str, command: str):
+        """Queues a command for later execution via ``Execute Remote``.
+
+        Arguments:
+        - ``session_name``: The session to queue on (e.g. ``r1``).
+        - ``command``: The shell command to queue. Supports ``$MEM{KEY}`` expansion.
+
+        Behavior:
+        - Expands ``$MEM{KEY}`` placeholders immediately.
+        - If the expanded command is ``$IGNORE``: the command is not queued (PASS).
+        - The command is appended to the session's internal command queue.
+        - No SSH call is made. Use ``Execute Remote`` to send all queued
+          commands in a single SSH call.
+
+        When ``Execute Remote`` is called without a command parameter, all
+        queued commands are joined with ``&&`` and executed as one combined
+        command. This preserves shell context (working directory, environment
+        variables) across multiple ``Set Remote`` calls.
+
+        Example (``set_remote_queue.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        |
+        | *** Variables ***
+        | ${IGNORE}    $IGNORE
+        |
+        | *** Test Cases ***
+        | Change Directory And List Files
+        |     Open Remote Session          r1    myserver
+        |     Set Remote                   r1    cd /opt/app
+        |     Set Remote                   r1    ls -la
+        |     Execute Remote               r1
+        |     Verify Remote Response WCM   r1    *app*
+        |     Close Remote Session         r1
+        |
+        | Ignore Token Skips Queuing
+        |     Open Remote Session     r1    myserver
+        |     Set Remote              r1    echo first
+        |     Set Remote              r1    ${IGNORE}
+        |     # only "echo first" is in the queue
+        |     Execute Remote          r1
+        |     Verify Remote Response  r1    first
+        |     Close Remote Session    r1
+        """
+        s = self._ensure_session(session_name)
+        expanded = expand_mem(command, self._store)
+        if self._check_ignore(expanded):
+            return
+        s["command_queue"].append(expanded)
+        logger.info(f"Queued: {expanded}")
+
+    @keyword("Execute Remote")
+    def execute_remote(self, session_name: str, command: str = ""):
         """Executes a command on the remote host. Fails on nonzero exit code.
+
+        Can be used in two ways:
+
+        *Direct execution* (with command parameter):
+        Executes the given command immediately in a single SSH call.
+
+        *Queue execution* (without command parameter):
+        Joins all previously queued ``Set Remote`` commands with ``&&``
+        and executes them as one combined command. The queue is cleared
+        after execution.
 
         Arguments:
         - ``session_name``: The session to execute on (e.g. ``r1``).
-        - ``command``: The shell command to execute. Supports ``$MEM{KEY}`` expansion.
+        - ``command``: *(optional)* The shell command to execute directly.
+          Supports ``$MEM{KEY}`` expansion. If omitted, queued commands are used.
 
         Behavior:
         - Expands ``$MEM{KEY}`` placeholders in the command.
@@ -579,59 +706,82 @@ class RemoteSshLibrary:
         - Logs all response fields in a single keyword step (ASR logging).
         - Raises ``AssertionError`` if ``exit_code != 0``.
 
-        Example (``set_remote.robot``):
+        Example (``execute_remote.robot``):
         | *** Settings ***
         | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
         |
-        | *** Variables ***
-        | ${IGNORE}    $IGNORE
-        |
         | *** Test Cases ***
-        | Execute Command And Verify
-        |     Open Remote Session     r1    myserver
-        |     Set Remote              r1    whoami
-        |     Verify Remote Response  r1    testuser
-        |     Close Remote Session    r1
+        | Direct Single Command
+        |     Open Remote Session      r1    myserver
+        |     Execute Remote           r1    whoami
+        |     Verify Remote Response   r1    testuser
+        |     Close Remote Session     r1
         |
-        | Skip With Ignore Token
-        |     Open Remote Session     r1    myserver
-        |     Set Remote              r1    echo first
-        |     Set Remote              r1    ${IGNORE}
-        |     # last_response is still "echo first"
-        |     Verify Remote Response  r1    first
-        |     Close Remote Session    r1
+        | Queued Multi Command
+        |     Open Remote Session          r1    myserver
+        |     Set Remote                   r1    cd /opt/app
+        |     Set Remote                   r1    ls -la
+        |     Execute Remote               r1
+        |     Verify Remote Response WCM   r1    *app*
+        |     Close Remote Session         r1
         """
-        return self._set_remote(session_name, command, ignore_exit_code=False)
+        if command:
+            return self._execute_remote(session_name, command, ignore_exit_code=False)
+        else:
+            return self._execute_queued(session_name, ignore_exit_code=False)
 
-    @keyword("Set Remote And Continue")
-    def set_remote_and_continue(self, session_name: str, command: str):
+    @keyword("Execute Remote And Continue")
+    def execute_remote_and_continue(self, session_name: str, command: str = ""):
         """Executes a command on the remote host. Does *not* fail on nonzero exit code.
+
+        Can be used in two ways (same as ``Execute Remote``):
+
+        *Direct execution* (with command parameter):
+        Executes the given command immediately.
+
+        *Queue execution* (without command parameter):
+        Joins all previously queued ``Set Remote`` commands with ``&&``
+        and executes them as one combined command.
 
         Arguments:
         - ``session_name``: The session to execute on (e.g. ``r1``).
-        - ``command``: The shell command to execute. Supports ``$MEM{KEY}`` expansion.
+        - ``command``: *(optional)* The shell command to execute directly.
+          Supports ``$MEM{KEY}`` expansion. If omitted, queued commands are used.
 
         Behavior:
-        - Same as ``Set Remote``, but never raises on nonzero ``exit_code``.
+        - Same as ``Execute Remote``, but never raises on nonzero ``exit_code``.
         - Useful for commands that are expected to fail (e.g. testing error paths).
-        - ``$IGNORE`` token handling is identical to ``Set Remote``.
+        - ``$IGNORE`` token handling is identical to ``Execute Remote``.
 
-        Example (``set_remote_and_continue.robot``):
+        Example (``execute_remote_and_continue.robot``):
         | *** Settings ***
         | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
         |
         | *** Test Cases ***
         | Tolerate Nonzero Exit Code
-        |     Open Remote Session      r1    myserver
-        |     Set Remote And Continue   r1    exit 1
-        |     Verify Remote Exit Code   r1    1
-        |     Verify Remote Stderr      r1
-        |     Close Remote Session      r1
+        |     Open Remote Session             r1    myserver
+        |     Execute Remote And Continue     r1    exit 1
+        |     Verify Remote Exit Code         r1    1
+        |     Verify Remote Stderr            r1
+        |     Close Remote Session            r1
         """
-        return self._set_remote(session_name, command, ignore_exit_code=True)
+        if command:
+            return self._execute_remote(session_name, command, ignore_exit_code=True)
+        else:
+            return self._execute_queued(session_name, ignore_exit_code=True)
 
 
-    def _set_remote(self, session_name: str, command: str, ignore_exit_code: bool):
+    def _execute_queued(self, session_name: str, ignore_exit_code: bool):
+        """Joins all queued commands with '&&' and executes them."""
+        s = self._ensure_session(session_name)
+        queue = s.get("command_queue", [])
+        if not queue:
+            raise ValueError(f"Session '{session_name}' has no queued commands. Use 'Set Remote' first.")
+        combined = " && ".join(queue)
+        s["command_queue"] = []
+        return self._execute_remote(session_name, combined, ignore_exit_code=ignore_exit_code)
+
+    def _execute_remote(self, session_name: str, command: str, ignore_exit_code: bool):
         s = self._ensure_session(session_name)
         conn = s.get("connection", {})
 
@@ -718,7 +868,7 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Verify Stdout Exact Match
         |     Open Remote Session     r1    myserver
-        |     Set Remote              r1    hostname
+        |     Execute Remote           r1    hostname
         |     Verify Remote Response  r1    buildserver01
         |     Close Remote Session    r1
         """
@@ -754,13 +904,13 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Verify Stdout Contains Substring
         |     Open Remote Session          r1    myserver
-        |     Set Remote                   r1    uname -a
+        |     Execute Remote                r1    uname -a
         |     Verify Remote Response WCM   r1    *Linux*
         |     Close Remote Session         r1
         |
         | Verify Date Format With Single Char Wildcard
         |     Open Remote Session          r1    myserver
-        |     Set Remote                   r1    date +%d.%m.%Y
+        |     Execute Remote                r1    date +%d.%m.%Y
         |     Verify Remote Response WCM   r1    ??.??.????
         |     Close Remote Session         r1
         """
@@ -791,7 +941,7 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Verify Stdout Matches Regex
         |     Open Remote Session          r1    myserver
-        |     Set Remote                   r1    date +%Y-%m-%d
+        |     Execute Remote                r1    date +%Y-%m-%d
         |     Verify Remote Response REGX  r1    ^\\d{4}-\\d{2}-\\d{2}$
         |     Close Remote Session         r1
         """
@@ -825,13 +975,13 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Assert No Stderr Output
         |     Open Remote Session     r1    myserver
-        |     Set Remote              r1    echo ok
+        |     Execute Remote           r1    echo ok
         |     Verify Remote Stderr    r1
         |     Close Remote Session    r1
         |
         | Assert Stderr Contains Error Message
         |     Open Remote Session     r1    myserver
-        |     Set Remote And Continue r1    ls /nonexistent
+        |     Execute Remote And Continue    r1    ls /nonexistent
         |     Verify Remote Stderr    r1    No such file or directory
         |     Close Remote Session    r1
         """
@@ -870,7 +1020,7 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Stderr Contains Warning Substring
         |     Open Remote Session       r1    myserver
-        |     Set Remote And Continue   r1    make build
+        |     Execute Remote And Continue     r1    make build
         |     Verify Remote Stderr WCM  r1    *warning*
         |     Close Remote Session      r1
         """
@@ -904,7 +1054,7 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Stderr Matches Error Pattern
         |     Open Remote Session        r1    myserver
-        |     Set Remote And Continue    r1    python3 broken.py
+        |     Execute Remote And Continue      r1    python3 broken.py
         |     Verify Remote Stderr REGX  r1    .*Error.*
         |     Close Remote Session       r1
         """
@@ -934,13 +1084,13 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Verify Successful Command
         |     Open Remote Session      r1    myserver
-        |     Set Remote               r1    echo ok
+        |     Execute Remote            r1    echo ok
         |     Verify Remote Exit Code  r1    0
         |     Close Remote Session     r1
         |
         | Verify Expected Failure
         |     Open Remote Session      r1    myserver
-        |     Set Remote And Continue  r1    exit 42
+        |     Execute Remote And Continue    r1    exit 42
         |     Verify Remote Exit Code  r1    42
         |     Close Remote Session     r1
         """
@@ -994,7 +1144,7 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Command Completes Within Timeout
         |     Open Remote Session      r1    myserver
-        |     Set Remote               r1    sleep 1
+        |     Execute Remote            r1    sleep 1
         |     Verify Remote Duration   r1    >=1000
         |     Verify Remote Duration   r1    500..3000
         |     Close Remote Session     r1
@@ -1048,9 +1198,9 @@ class RemoteSshLibrary:
         | *** Test Cases ***
         | Store And Reuse Hostname
         |     Open Remote Session              r1    myserver
-        |     Set Remote                       r1    hostname
+        |     Execute Remote                    r1    hostname
         |     Memorize Remote Response Field   r1    stdout    HOST
-        |     Set Remote                       r1    ping -c1 $MEM{HOST}
+        |     Execute Remote                    r1    ping -c1 $MEM{HOST}
         |     Verify Remote Exit Code          r1    0
         |     Close Remote Session             r1
         """

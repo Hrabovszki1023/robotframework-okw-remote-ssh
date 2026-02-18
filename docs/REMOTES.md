@@ -99,7 +99,7 @@ encoding: "utf-8"
 Unter Windows ist das robust:
 
 ```robot
-Set Remote    r1    cmd /c echo hello
+Execute Remote    r1    cmd /c echo hello
 ```
 
 ---
@@ -150,7 +150,7 @@ encoding: "utf-8"
 ### 3) Beispiel-Command (Linux)
 
 ```robot
-Set Remote    r1    echo hello
+Execute Remote    r1    echo hello
 ```
 
 ---
@@ -186,7 +186,7 @@ encoding: "utf-8"
 ### 3) Beispiel-Command (macOS)
 
 ```robot
-Set Remote    r1    echo hello
+Execute Remote    r1    echo hello
 ```
 
 ---
@@ -253,7 +253,7 @@ Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
 *** Test Cases ***
 Windows Localhost SSH
     Open Remote Session        r1    localhost
-    Set Remote                 r1    cmd /c echo hello
+    Execute Remote             r1    cmd /c echo hello
     Verify Remote Response WCM    r1    hello
     Close Remote Session       r1
 ```

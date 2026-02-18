@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "robotframework-okw-remote-ssh"
-version = "0.2.0"
+version = "0.3.0"
 description = "Robot Framework keyword library for deterministic remote command execution and SFTP file transfer via SSH."
 authors = [{ name = "Zoltán Hrabovszki" }]
 readme = "README.md"

@@ -8,15 +8,15 @@ ${EMPTY_TOKEN}    $EMPTY
 *** Test Cases ***
 Value Expansion Should Work
     Open Remote Session    r1    dummy
-    Set Remote    r1    abc
+    Execute Remote    r1    abc
     Memorize Remote Response Field    r1    stdout    MYKEY
-    Set Remote    r1    prefix-$MEM{MYKEY}-suffix
+    Execute Remote    r1    prefix-$MEM{MYKEY}-suffix
     Verify Remote Response    r1    prefix-abc-suffix
     Close Remote Session    r1
 
 Value Expansion Should Fail On Missing Key
     Open Remote Session    r1    dummy
-    Run Keyword And Expect Error    *    Set Remote    r1    test-$MEM{UNKNOWN}
+    Run Keyword And Expect Error    *    Execute Remote    r1    test-$MEM{UNKNOWN}
     Close Remote Session    r1
 
 Open Remote Session Should Fail On Unknown Config
@@ -30,116 +30,162 @@ Open Remote Session Should Fail On Missing Host
 
 Verify Stderr Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     # Stub sets stderr empty -> verify empty (default: no expected arg)
     Verify Remote Stderr   r1
     Close Remote Session   r1
 
 Verify Exit Code Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Verify Remote Exit Code    r1    0
     Close Remote Session   r1
 
 Verify Duration Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Verify Remote Duration    r1    >=0
     Close Remote Session   r1
 
-Ignore Token Should Skip Set Remote
+Ignore Token Should Skip Execute Remote
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Verify Remote Response    r1    abc
 
-    # $IGNORE skips the next action, last_response unchanged
-    Set Remote             r1    ${IGNORE}
+    # $IGNORE skips execution, last_response unchanged
+    Execute Remote         r1    ${IGNORE}
 
     # last_response should still be the previous successful command
     Verify Remote Response    r1    abc
     Close Remote Session   r1
 
-Ignore Token Should Skip Verify Response
+Ignore Token Should Skip Set Remote Queuing
+    [Documentation]    $IGNORE in Set Remote skips queuing. Only the non-ignored command is executed.
     Open Remote Session    r1    dummy
     Set Remote             r1    abc
+    Set Remote             r1    ${IGNORE}
+    # Only "abc" is in the queue
+    Execute Remote         r1
+    Verify Remote Response    r1    abc
+    Close Remote Session   r1
+
+Ignore Token Should Skip Verify Response
+    Open Remote Session    r1    dummy
+    Execute Remote         r1    abc
     # $IGNORE skips verification -> PASS regardless of actual value
     Verify Remote Response    r1    ${IGNORE}
     Close Remote Session   r1
 
 Ignore Token Should Skip Verify Exit Code
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Verify Remote Exit Code    r1    ${IGNORE}
     Close Remote Session   r1
 
 Ignore Token Should Skip Verify Duration
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Verify Remote Duration    r1    ${IGNORE}
     Close Remote Session   r1
 
 Empty Token Should Verify Stderr Empty
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Verify Remote Stderr   r1    ${EMPTY_TOKEN}
     Close Remote Session   r1
 
 Verify Stderr With Empty String Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     # Robot ${EMPTY} = "" -> EXACT match against "" -> PASS (stderr is empty)
     Verify Remote Stderr   r1    ${EMPTY}
     Close Remote Session   r1
 
 Verify Response Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    hello world
+    Execute Remote         r1    hello world
     Verify Remote Response    r1    hello world
     Close Remote Session   r1
 
 Verify Response WCM Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    hello world
+    Execute Remote         r1    hello world
     Verify Remote Response WCM    r1    *world
     Close Remote Session   r1
 
 Verify Response WCM Question Mark Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    Date: 23.10.1963
+    Execute Remote         r1    Date: 23.10.1963
     Verify Remote Response WCM    r1    Date: ??.??.????
     Close Remote Session   r1
 
 Verify Response REGX Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    hello world 42
+    Execute Remote         r1    hello world 42
     Verify Remote Response REGX    r1    world\\s+\\d+
     Close Remote Session   r1
 
 Verify Stderr WCM Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     # Stub stderr is empty -> WCM empty pattern matches empty string
     Verify Remote Stderr WCM    r1    ${EMPTY}
     Close Remote Session   r1
 
 Verify Response WCM Combined Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    Name Hans Mueller Datum 23.10.1963 Ort Graz
+    Execute Remote         r1    Name Hans Mueller Datum 23.10.1963 Ort Graz
     Verify Remote Response WCM    r1    *Hans Mueller* ??.??.???? *
     Close Remote Session   r1
 
 Verify Stderr REGX Should Work
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     # Stub stderr is empty -> REGX match against ^$
     Verify Remote Stderr REGX    r1    ^$
     Close Remote Session   r1
 
-Set Remote And Continue Should Not Fail On Nonzero Exit
+Execute Remote And Continue Should Not Fail On Nonzero Exit
     [Documentation]    Stub always returns exit_code=0, so this just verifies the keyword exists and works.
     Open Remote Session    r1    dummy
-    Set Remote And Continue    r1    abc
+    Execute Remote And Continue    r1    abc
     Verify Remote Exit Code    r1    0
+    Close Remote Session   r1
+
+# ---- Queue Tests: Set Remote + Execute Remote ----
+
+Queued Commands Should Execute Together
+    [Documentation]    Multiple Set Remote commands are joined with && and executed as one.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    echo first
+    Set Remote             r1    echo second
+    Execute Remote         r1
+    # Stub: stdout = combined command
+    Verify Remote Response    r1    echo first && echo second
+    Close Remote Session   r1
+
+Queued Single Command Should Work
+    [Documentation]    A single Set Remote followed by Execute Remote works like Execute Remote with command.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    whoami
+    Execute Remote         r1
+    Verify Remote Response    r1    whoami
+    Close Remote Session   r1
+
+Execute Remote Without Queue Should Fail
+    [Documentation]    Execute Remote without command and without queued commands must fail.
+    Open Remote Session    r1    dummy
+    Run Keyword And Expect Error    *no queued commands*    Execute Remote    r1
+    Close Remote Session   r1
+
+Queued Commands With Ignore Should Skip Ignored
+    [Documentation]    $IGNORE in Set Remote skips that command, rest of queue remains.
+    Open Remote Session    r1    dummy
+    Set Remote             r1    cd /opt
+    Set Remote             r1    ${IGNORE}
+    Set Remote             r1    ls
+    Execute Remote         r1
+    Verify Remote Response    r1    cd /opt && ls
     Close Remote Session   r1
 
 # ---- Negative Tests: wrong expected value must FAIL ----
@@ -147,56 +193,56 @@ Set Remote And Continue Should Not Fail On Nonzero Exit
 Verify Response Should Fail On Mismatch
     [Documentation]    EXACT match with wrong expected value must raise error.
     Open Remote Session    r1    dummy
-    Set Remote             r1    hello world
+    Execute Remote         r1    hello world
     Run Keyword And Expect Error    *    Verify Remote Response    r1    wrong value
     Close Remote Session   r1
 
 Verify Response WCM Should Fail On Mismatch
     [Documentation]    Wildcard pattern that does not match must raise error.
     Open Remote Session    r1    dummy
-    Set Remote             r1    hello world
+    Execute Remote         r1    hello world
     Run Keyword And Expect Error    *    Verify Remote Response WCM    r1    *xyz*
     Close Remote Session   r1
 
 Verify Response REGX Should Fail On Mismatch
     [Documentation]    Regex that does not match must raise error.
     Open Remote Session    r1    dummy
-    Set Remote             r1    hello world
+    Execute Remote         r1    hello world
     Run Keyword And Expect Error    *    Verify Remote Response REGX    r1    ^\\d+$
     Close Remote Session   r1
 
 Verify Stderr Should Fail On Mismatch
     [Documentation]    Stub stderr is empty; expecting non-empty text must fail.
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Run Keyword And Expect Error    *    Verify Remote Stderr    r1    some error text
     Close Remote Session   r1
 
 Verify Stderr WCM Should Fail On Mismatch
     [Documentation]    Stub stderr is empty; wildcard pattern must fail.
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Run Keyword And Expect Error    *    Verify Remote Stderr WCM    r1    *error*
     Close Remote Session   r1
 
 Verify Stderr REGX Should Fail On Mismatch
     [Documentation]    Stub stderr is empty; regex expecting content must fail.
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Run Keyword And Expect Error    *    Verify Remote Stderr REGX    r1    .+
     Close Remote Session   r1
 
 Verify Exit Code Should Fail On Mismatch
     [Documentation]    Stub exit_code is 0; expecting 1 must fail.
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Run Keyword And Expect Error    *    Verify Remote Exit Code    r1    1
     Close Remote Session   r1
 
 Verify Duration Should Fail On Mismatch
     [Documentation]    Stub duration_ms is 0; expecting >=9999 must fail.
     Open Remote Session    r1    dummy
-    Set Remote             r1    abc
+    Execute Remote         r1    abc
     Run Keyword And Expect Error    *    Verify Remote Duration    r1    >=9999
     Close Remote Session   r1
 
@@ -342,6 +388,6 @@ Put Remote File Should Store Last Response
     Open Remote Session    r1    dummy
     Put Remote File    r1    ${CURDIR}/fixtures/testfile.txt    /tmp/testfile.txt
     Memorize Remote Response Field    r1    action    PUT_ACTION
-    Set Remote    r1    $MEM{PUT_ACTION}
+    Execute Remote    r1    $MEM{PUT_ACTION}
     Verify Remote Response    r1    put_file
     Close Remote Session   r1

@@ -15,8 +15,9 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 
 | Keyword | Parameters | Description |
 |---------|-----------|-------------|
-| `Set Remote` | `<session>` `<command>` | Executes command. FAIL on `exit_code != 0`. |
-| `Set Remote And Continue` | `<session>` `<command>` | Executes command. Never fails on nonzero `exit_code`. |
+| `Set Remote` | `<session>` `<command>` | Queues command for later execution (no SSH call). |
+| `Execute Remote` | `<session>` `[command]` | With command: executes immediately. Without: joins queued commands with `&&` and executes. FAIL on `exit_code != 0`. |
+| `Execute Remote And Continue` | `<session>` `[command]` | Same as `Execute Remote`, but never fails on nonzero `exit_code`. |
 
 ### Verification – stdout
 
@@ -120,7 +121,8 @@ This library follows the OKW Global Token Model defined in `okw-contract-utils`.
 Supported tokens:
 
 - `$IGNORE` (supported)
-  - For `Set Remote` / `Set Remote And Continue`: execution is skipped (no SSH call, `last_response` unchanged, PASS).
+  - For `Set Remote`: the command is not added to the queue (PASS).
+- For `Execute Remote` / `Execute Remote And Continue`: execution is skipped (no SSH call, `last_response` unchanged, PASS).
   - For verify keywords with an expected/pattern/expr parameter: verification is skipped (no-op, PASS).
   - For file transfer keywords: if any path parameter expands to `$IGNORE`, the transfer/verify/remove is skipped (PASS).
 
@@ -149,11 +151,11 @@ Missing keys cause FAIL (no silent fallback).
 ## Default Semantics
 
 - `Verify Remote Stderr <session>` without expected parameter: asserts stderr is empty.
-- `Set Remote` fails immediately (AssertionError) on `exit_code != 0`, after logging and storing the response.
-- `Set Remote And Continue` never fails on nonzero `exit_code`.
+- `Execute Remote` fails immediately (AssertionError) on `exit_code != 0`, after logging and storing the response.
+- `Execute Remote And Continue` never fails on nonzero `exit_code`.
 
 ## ASR Logging
 
-`Set Remote` / `Set Remote And Continue` log in the same keyword step:
+`Execute Remote` / `Execute Remote And Continue` log in the same keyword step:
 - `command`, `stdout`, `stderr`, `exit_code`, `duration_ms`
 - stdout/stderr are normalized (`\r\n` → `\n`, rstrip) before storing/logging.

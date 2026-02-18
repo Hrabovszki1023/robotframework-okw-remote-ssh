@@ -16,7 +16,7 @@ ${CONFIG}     testhost
 Open Session And Execute Command
     [Documentation]    Opens a real SSH session, runs a command, verifies output.
     Open Remote Session    ${SESSION}    ${CONFIG}
-    Set Remote             ${SESSION}    echo Hello from OKW
+    Execute Remote         ${SESSION}    echo Hello from OKW
     Verify Remote Response    ${SESSION}    Hello from OKW
     Verify Remote Stderr   ${SESSION}
     Verify Remote Exit Code    ${SESSION}    0
@@ -25,14 +25,14 @@ Open Session And Execute Command
 Verify Exit Code On Failing Command
     [Documentation]    Runs a command that fails, verifies exit code.
     Open Remote Session    ${SESSION}    ${CONFIG}
-    Set Remote And Continue    ${SESSION}    exit 42
+    Execute Remote And Continue    ${SESSION}    exit 42
     Verify Remote Exit Code    ${SESSION}    42
     Close Remote Session    ${SESSION}
 
 WCM And REGX Matching
     [Documentation]    Tests wildcard and regex matching against real stdout.
     Open Remote Session    ${SESSION}    ${CONFIG}
-    Set Remote             ${SESSION}    echo "Date: 23.10.1963"
+    Execute Remote         ${SESSION}    echo "Date: 23.10.1963"
     Verify Remote Response WCM     ${SESSION}    *??.??.????*
     Verify Remote Response REGX    ${SESSION}    Date:\\s+\\d{2}\\.\\d{2}\\.\\d{4}
     Close Remote Session    ${SESSION}
@@ -42,7 +42,7 @@ File Transfer Round Trip
     Open Remote Session    ${SESSION}    ${CONFIG}
 
     # Create a local temp file
-    Set Remote    ${SESSION}    echo "OKW test content" > /tmp/okw_upload_test.txt
+    Execute Remote    ${SESSION}    echo "OKW test content" > /tmp/okw_upload_test.txt
 
     # Verify it exists
     Verify Remote File Exists    ${SESSION}    /tmp/okw_upload_test.txt    YES
