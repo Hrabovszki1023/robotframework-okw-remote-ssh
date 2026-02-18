@@ -6,6 +6,8 @@ Session-based command execution, structured verification (stdout, stderr, exit c
 and SFTP file transfer. Designed for CI pipelines, infrastructure validation, and cross-platform
 automation (Linux, macOS, Windows with OpenSSH).
 
+**[Keyword Documentation (Libdoc)](https://hrabovszki1023.github.io/robotframework-okw-remote-ssh/RemoteSshLibrary.html)**
+
 ## Features
 
 - **Session-based** SSH connections via Paramiko
