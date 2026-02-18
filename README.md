@@ -173,6 +173,14 @@ All remove keywords are **idempotent**: if the target does not exist, they retur
 | `$IGNORE` | Keyword becomes a no-op (PASS). Execution/verification/transfer is skipped. |
 | `$EMPTY` | For verify keywords: asserts that the checked field is empty. |
 
+## KI-Testgenerierung
+
+Testfaelle koennen mit jeder KI (Claude, ChatGPT, Copilot, ...) generiert werden.
+Den System-Prompt dafuer findest du unter [`prompts/okw-testgenerator.md`](prompts/okw-testgenerator.md).
+
+Einfach den Prompt in die KI kopieren und natuerlichsprachig beschreiben, was getestet werden soll.
+Die KI erzeugt ein fertiges `.robot`-File.
+
 ## License
 
 AGPL-3.0-or-later. See [LICENSE](LICENSE) for details.
