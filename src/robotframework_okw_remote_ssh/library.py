@@ -30,9 +30,105 @@ class RemoteSshLibrary:
 
     = Session Management =
 
-    Multiple sessions can be opened concurrently, each referenced by an abstract
-    session name (e.g. ``r1``). Connection details are loaded from YAML files
+    Multiple sessions can be opened concurrently, each referenced by an
+    *abstract* session name (e.g. ``r1``). The abstract name is a freely
+    chosen identifier that decouples the test logic from concrete connection
+    details. The concrete connection parameters are loaded from a YAML file
     in the configured ``config_dir`` directory (default: ``remotes/``).
+
+    | *Ebene*   | *Beschreibung*                | *Beispiel*              |
+    | Abstrakt  | Session-Name im Testfall      | ``r1``                  |
+    | Konkret   | YAML-Datei mit Verbindungsdaten | ``remotes/buildserver01.yaml`` |
+
+    The YAML file contains all concrete connection details for one remote host.
+    The ``password`` field must **never** appear in this file; authentication
+    credentials are resolved from the local secrets file (see _Secrets_ below).
+
+    *Remote-Konfiguration Vorlage* (``remotes/<config_ref>.yaml``):
+
+    | # --------------------------------------------------
+    | # Remote Definition: buildserver01
+    | # Pfad: remotes/buildserver01.yaml
+    | # --------------------------------------------------
+    |
+    | # Konkret: Hostname oder IP-Adresse des Zielrechners
+    | host: "192.168.1.100"
+    |
+    | # Konkret: SSH-Port (Standard: 22)
+    | port: 22
+    |
+    | # Konkret: Benutzername für die SSH-Anmeldung
+    | username: "deploy"
+    |
+    | # Konkret: Verbindungs- und Kommando-Timeout in Sekunden (Standard: 10)
+    | timeout: 10
+    |
+    | # Konkret: Zeichenkodierung der Ausgabe (Standard: utf-8)
+    | encoding: "utf-8"
+    |
+    | # Authentifizierung
+    | auth:
+    |   # Konkret: Authentifizierungstyp (aktuell nur "password" unterstützt)
+    |   type: password
+    |   # Abstrakt: Verweis auf den Eintrag in ~/.okw/secrets.yaml
+    |   secret_id: "buildserver01/deploy"
+
+    | *Feld*         | *Pflicht* | *Standard* | *Abstrakt / Konkret* | *Beschreibung*                        |
+    | host           | Ja        |            | Konkret               | Hostname oder IP-Adresse              |
+    | port           | Nein      | 22         | Konkret               | SSH-Port                              |
+    | username       | Ja        |            | Konkret               | SSH-Benutzername                      |
+    | timeout        | Nein      | 10         | Konkret               | Timeout in Sekunden                   |
+    | encoding       | Nein      | utf-8      | Konkret               | Zeichenkodierung der Ausgabe          |
+    | auth.type      | Ja        |            | Konkret               | Authentifizierungstyp (``password``)  |
+    | auth.secret_id | Ja        |            | Abstrakt              | Verweis auf ``~/.okw/secrets.yaml``   |
+
+    = Secrets =
+
+    Passwörter werden niemals im Repository gespeichert. Sie werden aus einer
+    lokalen Secrets-Datei aufgelöst (Standard: ``~/.okw/secrets.yaml``).
+    Die Remote-YAML-Konfiguration referenziert Secrets über ``auth.secret_id``.
+
+    | *Ebene*   | *Beschreibung*                   | *Beispiel*                              |
+    | Abstrakt  | ``secret_id`` in der Remote-YAML | ``"buildserver01/deploy"``              |
+    | Konkret   | Passwort in der Secrets-Datei    | Eintrag in ``~/.okw/secrets.yaml``      |
+
+    *Secrets-Datei Vorlage* (``~/.okw/secrets.yaml``):
+
+    | # --------------------------------------------------
+    | # OKW Secrets – NICHT ins Repository einchecken!
+    | # Pfad: ~/.okw/secrets.yaml  (Linux/macOS)
+    | #        %USERPROFILE%\.okw\secrets.yaml  (Windows)
+    | # --------------------------------------------------
+    |
+    | secrets:
+    |   # Abstrakt: secret_id -> Konkret: Passwort
+    |   #
+    |   # Jeder Eintrag entspricht einer auth.secret_id
+    |   # aus einer Remote-YAML-Konfiguration.
+    |
+    |   # Konkret: Passwort für buildserver01, Benutzer deploy
+    |   buildserver01/deploy:
+    |     password: "S3cur3!Pass#2025"
+    |
+    |   # Konkret: Passwort für appserver, Benutzer admin
+    |   appserver/admin:
+    |     password: "Adm1n_Pa$$w0rd"
+    |
+    |   # Konkret: Passwort für testnode, Benutzer root
+    |   testnode/root:
+    |     password: "T3stR00t!"
+
+    | *Feld*                        | *Abstrakt / Konkret* | *Beschreibung*                                 |
+    | ``secrets``                   |                      | Top-Level-Mapping (Pflicht)                    |
+    | ``secrets.<secret_id>``       | Abstrakt             | Schlüssel = ``auth.secret_id`` aus Remote-YAML |
+    | ``secrets.<secret_id>.password`` | Konkret           | Das eigentliche Passwort                       |
+
+    *Sicherheitshinweise:*
+
+    | *Regel*                                                                            |
+    | Die Secrets-Datei liegt außerhalb des Repositories (im Home-Verzeichnis).           |
+    | Passwörter werden nur im Arbeitsspeicher gehalten, niemals geloggt.                 |
+    | Enthält die Remote-YAML ein password-Feld, wird sofort ein Fehler ausgelöst.        |
 
     = Value Expansion =
 
@@ -59,12 +155,6 @@ class RemoteSshLibrary:
     2. OKW value expansion (``$MEM{KEY}`` -> stored value)
     3. Token parsing (``$IGNORE``, ``$EMPTY``)
     4. Keyword execution / verification
-
-    = Secrets =
-
-    Passwords are never stored in the repository. They are resolved from a local
-    secrets file (default: ``~/.okw/secrets.yaml``). Remote YAML configs reference
-    secrets via ``auth.secret_id``.
 
     = Examples =
 
