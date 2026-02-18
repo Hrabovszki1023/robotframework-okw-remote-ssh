@@ -240,6 +240,79 @@ Regeln fuer die Ausgabe:
 
 ---
 
+## Log-Formate (Fehleranalyse)
+
+Wenn ein Testfall fehlschlaegt, findest du im Robot Framework Log (`log.html`)
+die Ursache. Jede Keyword-Kategorie hat ein festes Log-Format:
+
+### Execute Remote / Execute Remote And Continue
+
+```
+command:
+<der ausgefuehrte Befehl>
+stdout:
+<Standardausgabe>
+stderr:
+<Fehlerausgabe>
+exit_code: <0|1|...>
+duration_ms: <Dauer>
+```
+
+Typische Fehlerursachen:
+- `exit_code: 1` bei `Execute Remote` → Befehl fehlgeschlagen (z.B. Datei nicht gefunden).
+- `stderr:` enthaelt die Fehlermeldung des Remote-Systems.
+- `stdout:` enthaelt nicht den erwarteten Wert → `Verify Remote Response` schlaegt fehl.
+
+### Verify Remote File Exists / Verify Remote Directory Exists
+
+```
+command:
+SFTP stat()
+path:
+<der geprueft Pfad>
+exists: <YES|NO>
+expected: <YES|NO>
+```
+
+- `exists` = **Ist-Wert** (was SFTP auf dem Server gefunden hat).
+- `expected` = **Soll-Wert** (was der Testfall erwartet).
+- Fehler wenn `exists` != `expected`, z.B.: Datei sollte existieren (`expected: YES`),
+  existiert aber nicht (`exists: NO`) → Pfad falsch? Datei nicht erstellt?
+
+### Remove Keywords
+
+`Remove Remote File`:
+```
+command:
+SFTP remove()
+path:
+<Pfad>
+result: removed
+```
+
+`Remove Remote Directory Recursively` loggt pro Eintrag:
+```
+SFTP remove(): <Dateipfad>
+SFTP rmdir(): <Verzeichnispfad>
+```
+
+Wenn Ziel nicht existiert (kein Fehler, idempotent):
+```
+Directory does not exist (already absent): <Pfad>
+```
+
+### Fehleranalyse-Tipps
+
+Wenn du ein Log analysierst, pruefe in dieser Reihenfolge:
+
+1. **exit_code** – Ist der Befehl ueberhaupt gelaufen? (`exit_code: 0` = OK)
+2. **stderr** – Gibt es eine Fehlermeldung vom System?
+3. **stdout** – Stimmt die Ausgabe mit dem erwarteten Wert ueberein?
+4. **exists vs. expected** – Bei SFTP: Stimmt Ist mit Soll ueberein?
+5. **path** – Ist der Pfad korrekt? Gross-/Kleinschreibung? Slash-Richtung?
+
+---
+
 ## Erweiterbarkeit
 
 Dieser Prompt ist fuer weitere OKW-Bibliotheken vorbereitet. Wenn neue Bibliotheken
