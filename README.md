@@ -19,19 +19,19 @@ automation (Linux, macOS, Windows with OpenSSH).
 - **Value expansion**: `$MEM{KEY}` placeholders across all parameters
 - **No GUI coupling**, no dependency on OKW Core
 
-## Drei-Phasen-Modell
+## Three-Phase Model
 
-Alle Keywords folgen einem festen Zusammenspiel:
+All keywords follow a fixed pattern:
 
-| Phase | Keywords | Aufgabe |
+| Phase | Keywords | Purpose |
 |-------|----------|---------|
-| **Vorbereiten** | `Set Remote` | Kommandos sammeln (kein SSH-Aufruf) |
-| **Ausführen** | `Execute Remote`, `Execute Remote And Continue` | Kommandos absenden, Ergebnis speichern |
-| **Prüfen** | `Verify Remote Response`, `Verify Remote Stderr`, `Verify Remote Exit Code`, ... | Gespeichertes Ergebnis auswerten |
+| **Prepare** | `Set Remote` | Queue commands (no SSH call) |
+| **Execute** | `Execute Remote`, `Execute Remote And Continue` | Send commands and store result |
+| **Verify** | `Verify Remote Response`, `Verify Remote Stderr`, `Verify Remote Exit Code`, ... | Evaluate stored result |
 
-> **Hinweis:** *Vorbereiten* ist optional – `Execute Remote` kann auch direkt mit einem Kommando aufgerufen werden.
-> Werden mehrere `Set Remote` gesammelt, baut `Execute Remote` sie mit `&&` zusammen und schickt sie als **einen** SSH-Aufruf.
-> So bleibt der Shell-Kontext (Arbeitsverzeichnis, Variablen) erhalten.
+> **Note:** *Prepare* is optional — `Execute Remote` can also be called directly with a command.
+> When multiple `Set Remote` calls are queued, `Execute Remote` joins them with `&&` and sends them as **one** SSH call.
+> This preserves shell context (working directory, variables).
 
 ## Installation
 
@@ -173,13 +173,14 @@ All remove keywords are **idempotent**: if the target does not exist, they retur
 | `$IGNORE` | Keyword becomes a no-op (PASS). Execution/verification/transfer is skipped. |
 | `$EMPTY` | For verify keywords: asserts that the checked field is empty. |
 
-## KI-Testgenerierung
+## AI Test Generation
 
-Testfaelle koennen mit jeder KI (Claude, ChatGPT, Copilot, ...) generiert werden.
-Den System-Prompt dafuer findest du unter [`prompts/okw-testgenerator.md`](prompts/okw-testgenerator.md).
+Test cases can be generated with any LLM (Claude, ChatGPT, Copilot, ...).
+The system prompts for test generation are maintained centrally in
+[`robotframework-okw4robot/prompts/`](https://github.com/Hrabovszki1023/robotframework-okw4robot/tree/main/prompts).
 
-Einfach den Prompt in die KI kopieren und natuerlichsprachig beschreiben, was getestet werden soll.
-Die KI erzeugt ein fertiges `.robot`-File.
+Copy the prompt into your LLM and describe what you want to test in natural language.
+The LLM produces a ready-to-run `.robot` file.
 
 ## License
 
