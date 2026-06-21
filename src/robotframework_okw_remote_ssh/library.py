@@ -28,34 +28,33 @@ class RemoteSshLibrary:
     keywords (``Execute Remote``) write to ``last_response``, verification
     keywords read from it.
 
-    = Drei-Phasen-Modell =
+    = Three-Phase Model =
 
-    Alle Schlüsselwörter dieser Bibliothek arbeiten nach einem festen
-    Drei-Phasen-Prinzip zusammen:
+    All keywords in this library follow a fixed three-phase pattern:
 
-    | *Phase*       | *Schlüsselwörter*                                       | *Aufgabe*                                    |
-    | Vorbereiten   | ``Set Remote``                                          | Kommandos sammeln (kein SSH-Aufruf)          |
-    | Ausführen     | ``Execute Remote``, ``Execute Remote And Continue``     | Kommandos absenden und Ergebnis speichern    |
-    | Prüfen        | ``Verify Remote Response``, ``Verify Remote Stderr``, ``Verify Remote Exit Code``, ... | Gespeichertes Ergebnis auswerten |
+    | *Phase*   | *Keywords*                                              | *Purpose*                                    |
+    | Prepare   | ``Set Remote``                                          | Queue commands (no SSH call)                 |
+    | Execute   | ``Execute Remote``, ``Execute Remote And Continue``     | Send commands and store result               |
+    | Verify    | ``Verify Remote Response``, ``Verify Remote Stderr``, ``Verify Remote Exit Code``, ... | Evaluate stored result |
 
-    *Vorbereiten* ist optional – ``Execute Remote`` kann auch direkt mit einem
-    Kommando aufgerufen werden. Werden mehrere ``Set Remote`` gesammelt, baut
-    ``Execute Remote`` sie mit ``&&`` zusammen und schickt sie als einen
-    SSH-Aufruf. So bleibt der Shell-Kontext (Arbeitsverzeichnis, Variablen)
-    über mehrere Kommandos hinweg erhalten.
+    *Prepare* is optional — ``Execute Remote`` can also be called directly
+    with a command parameter. When multiple ``Set Remote`` calls are queued,
+    ``Execute Remote`` joins them with ``&&`` and sends them as a single
+    SSH call. This preserves shell context (working directory, variables)
+    across multiple commands.
 
-    *Ausführen* schreibt das Ergebnis (stdout, stderr, exit_code, duration_ms)
-    in ``last_response``. Erst danach können die *Prüfen*-Schlüsselwörter
-    darauf zugreifen.
+    *Execute* writes the result (stdout, stderr, exit_code, duration_ms)
+    to ``last_response``. Only after that can the *Verify* keywords
+    access it.
 
-    Beispiel für alle drei Phasen:
+    Example using all three phases:
 
-    | # Vorbereiten
+    | # Prepare
     | Set Remote                   r1    cd /opt/app
     | Set Remote                   r1    ls -la
-    | # Ausführen
+    | # Execute
     | Execute Remote               r1
-    | # Prüfen
+    | # Verify
     | Verify Remote Response WCM   r1    *app*
     | Verify Remote Exit Code      r1    0
 
@@ -67,99 +66,99 @@ class RemoteSshLibrary:
     details. The concrete connection parameters are loaded from a YAML file
     in the configured ``config_dir`` directory (default: ``remotes/``).
 
-    | *Ebene*   | *Beschreibung*                | *Beispiel*              |
-    | Abstrakt  | Session-Name im Testfall      | ``r1``                  |
-    | Konkret   | YAML-Datei mit Verbindungsdaten | ``remotes/buildserver01.yaml`` |
+    | *Level*    | *Description*                  | *Example*               |
+    | Abstract   | Session name in the test case  | ``r1``                  |
+    | Concrete   | YAML file with connection data | ``remotes/buildserver01.yaml`` |
 
     The YAML file contains all concrete connection details for one remote host.
     The ``password`` field must **never** appear in this file; authentication
     credentials are resolved from the local secrets file (see _Secrets_ below).
 
-    *Remote-Konfiguration Vorlage* (``remotes/<config_ref>.yaml``):
+    *Remote configuration template* (``remotes/<config_ref>.yaml``):
 
     | # --------------------------------------------------
     | # Remote Definition: buildserver01
-    | # Pfad: remotes/buildserver01.yaml
+    | # Path: remotes/buildserver01.yaml
     | # --------------------------------------------------
     |
-    | # Konkret: Hostname oder IP-Adresse des Zielrechners
+    | # Hostname or IP address of the target host
     | host: "192.168.1.100"
     |
-    | # Konkret: SSH-Port (Standard: 22)
+    | # SSH port (default: 22)
     | port: 22
     |
-    | # Konkret: Benutzername für die SSH-Anmeldung
+    | # Username for SSH authentication
     | username: "deploy"
     |
-    | # Konkret: Verbindungs- und Kommando-Timeout in Sekunden (Standard: 10)
+    | # Connection and command timeout in seconds (default: 10)
     | timeout: 10
     |
-    | # Konkret: Zeichenkodierung der Ausgabe (Standard: utf-8)
+    | # Output encoding (default: utf-8)
     | encoding: "utf-8"
     |
-    | # Authentifizierung
+    | # Authentication
     | auth:
-    |   # Konkret: Authentifizierungstyp (aktuell nur "password" unterstützt)
+    |   # Authentication type (currently only "password" supported)
     |   type: password
-    |   # Abstrakt: Verweis auf den Eintrag in ~/.okw/secrets.yaml
+    |   # Reference to the entry in ~/.okw/secrets.yaml
     |   secret_id: "buildserver01/deploy"
 
-    | *Feld*         | *Pflicht* | *Standard* | *Abstrakt / Konkret* | *Beschreibung*                        |
-    | host           | Ja        |            | Konkret               | Hostname oder IP-Adresse              |
-    | port           | Nein      | 22         | Konkret               | SSH-Port                              |
-    | username       | Ja        |            | Konkret               | SSH-Benutzername                      |
-    | timeout        | Nein      | 10         | Konkret               | Timeout in Sekunden                   |
-    | encoding       | Nein      | utf-8      | Konkret               | Zeichenkodierung der Ausgabe          |
-    | auth.type      | Ja        |            | Konkret               | Authentifizierungstyp (``password``)  |
-    | auth.secret_id | Ja        |            | Abstrakt              | Verweis auf ``~/.okw/secrets.yaml``   |
+    | *Field*        | *Required* | *Default* | *Abstract / Concrete* | *Description*                         |
+    | host           | Yes        |           | Concrete              | Hostname or IP address                |
+    | port           | No         | 22        | Concrete              | SSH port                              |
+    | username       | Yes        |           | Concrete              | SSH username                          |
+    | timeout        | No         | 10        | Concrete              | Timeout in seconds                    |
+    | encoding       | No         | utf-8     | Concrete              | Output encoding                       |
+    | auth.type      | Yes        |           | Concrete              | Authentication type (``password``)    |
+    | auth.secret_id | Yes        |           | Abstract              | Reference to ``~/.okw/secrets.yaml``  |
 
     = Secrets =
 
-    Passwörter werden niemals im Repository gespeichert. Sie werden aus einer
-    lokalen Secrets-Datei aufgelöst (Standard: ``~/.okw/secrets.yaml``).
-    Die Remote-YAML-Konfiguration referenziert Secrets über ``auth.secret_id``.
+    Passwords are never stored in the repository. They are resolved from a
+    local secrets file (default: ``~/.okw/secrets.yaml``).
+    The remote YAML configuration references secrets via ``auth.secret_id``.
 
-    | *Ebene*   | *Beschreibung*                   | *Beispiel*                              |
-    | Abstrakt  | ``secret_id`` in der Remote-YAML | ``"buildserver01/deploy"``              |
-    | Konkret   | Passwort in der Secrets-Datei    | Eintrag in ``~/.okw/secrets.yaml``      |
+    | *Level*    | *Description*                    | *Example*                               |
+    | Abstract   | ``secret_id`` in the remote YAML | ``"buildserver01/deploy"``              |
+    | Concrete   | Password in the secrets file     | Entry in ``~/.okw/secrets.yaml``        |
 
-    *Secrets-Datei Vorlage* (``~/.okw/secrets.yaml``):
+    *Secrets file template* (``~/.okw/secrets.yaml``):
 
     | # --------------------------------------------------
-    | # OKW Secrets – NICHT ins Repository einchecken!
-    | # Pfad: ~/.okw/secrets.yaml  (Linux/macOS)
+    | # OKW Secrets – DO NOT commit to the repository!
+    | # Path: ~/.okw/secrets.yaml  (Linux/macOS)
     | #        %USERPROFILE%\.okw\secrets.yaml  (Windows)
     | # --------------------------------------------------
     |
     | secrets:
-    |   # Abstrakt: secret_id -> Konkret: Passwort
+    |   # Abstract: secret_id -> Concrete: password
     |   #
-    |   # Jeder Eintrag entspricht einer auth.secret_id
-    |   # aus einer Remote-YAML-Konfiguration.
+    |   # Each entry corresponds to an auth.secret_id
+    |   # from a remote YAML configuration.
     |
-    |   # Konkret: Passwort für buildserver01, Benutzer deploy
+    |   # Password for buildserver01, user deploy
     |   buildserver01/deploy:
     |     password: "S3cur3!Pass#2025"
     |
-    |   # Konkret: Passwort für appserver, Benutzer admin
+    |   # Password for appserver, user admin
     |   appserver/admin:
     |     password: "Adm1n_Pa$$w0rd"
     |
-    |   # Konkret: Passwort für testnode, Benutzer root
+    |   # Password for testnode, user root
     |   testnode/root:
     |     password: "T3stR00t!"
 
-    | *Feld*                        | *Abstrakt / Konkret* | *Beschreibung*                                 |
-    | ``secrets``                   |                      | Top-Level-Mapping (Pflicht)                    |
-    | ``secrets.<secret_id>``       | Abstrakt             | Schlüssel = ``auth.secret_id`` aus Remote-YAML |
-    | ``secrets.<secret_id>.password`` | Konkret           | Das eigentliche Passwort                       |
+    | *Field*                         | *Abstract / Concrete* | *Description*                                  |
+    | ``secrets``                     |                       | Top-level mapping (required)                   |
+    | ``secrets.<secret_id>``         | Abstract              | Key = ``auth.secret_id`` from remote YAML      |
+    | ``secrets.<secret_id>.password``| Concrete              | The actual password                            |
 
-    *Sicherheitshinweise:*
+    *Security notes:*
 
-    | *Regel*                                                                            |
-    | Die Secrets-Datei liegt außerhalb des Repositories (im Home-Verzeichnis).           |
-    | Passwörter werden nur im Arbeitsspeicher gehalten, niemals geloggt.                 |
-    | Enthält die Remote-YAML ein password-Feld, wird sofort ein Fehler ausgelöst.        |
+    | *Rule*                                                                             |
+    | The secrets file is stored outside the repository (in the home directory).          |
+    | Passwords are kept in memory only, never logged.                                   |
+    | If the remote YAML contains a password field, an error is raised immediately.      |
 
     = Command Execution =
 
@@ -188,10 +187,10 @@ class RemoteSshLibrary:
     | Execute Remote And Continue    r1    cat /no/such/file
     | Verify Remote Exit Code        r1    1
 
-    | *Keyword*                       | *Verhalten*                                                          |
-    | ``Set Remote``                  | Sammelt ein Kommando in der Queue (kein SSH-Aufruf)                  |
-    | ``Execute Remote``              | Mit Kommando: sofortige Ausführung. Ohne: Queue zusammenbauen und ausführen |
-    | ``Execute Remote And Continue`` | Wie ``Execute Remote``, aber kein FAIL bei exit_code != 0            |
+    | *Keyword*                       | *Behavior*                                                           |
+    | ``Set Remote``                  | Queues a command (no SSH call)                                       |
+    | ``Execute Remote``              | With command: immediate execution. Without: joins queue and executes |
+    | ``Execute Remote And Continue`` | Same as ``Execute Remote``, but no FAIL on exit_code != 0            |
 
     = Value Expansion =
 
