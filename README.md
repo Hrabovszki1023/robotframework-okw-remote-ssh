@@ -33,6 +33,11 @@ All keywords follow a fixed pattern:
 > When multiple `Set Remote` calls are queued, `Execute Remote` joins them with `&&` and sends them as **one** SSH call.
 > This preserves shell context (working directory, variables).
 
+## Alternative
+
+Looking for a general-purpose SSH library? See [SSHLibrary](https://github.com/MarketSquare/SSHLibrary).
+A detailed [feature comparison](docs/comparison-sshlibrary.md) explains the differences in approach.
+
 ## Installation
 
 ```bash
