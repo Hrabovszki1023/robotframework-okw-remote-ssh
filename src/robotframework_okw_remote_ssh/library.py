@@ -432,6 +432,15 @@ class RemoteSshLibrary:
 
         return files_transferred, dirs_created, bytes_total
 
+    def _sftp_chmod_recursive(self, sftp, remote_dir: str, mode_int: int):
+        """Applies chmod to all files in a remote directory tree."""
+        for entry in sftp.listdir_attr(remote_dir):
+            remote_path = f"{remote_dir}/{entry.filename}"
+            if stat.S_ISDIR(entry.st_mode):
+                self._sftp_chmod_recursive(sftp, remote_path, mode_int)
+            else:
+                sftp.chmod(remote_path, mode_int)
+
     def _sftp_get_dir(self, sftp, remote_dir: str, local_dir: str):
         """Recursively downloads a directory. Returns (files, dirs, bytes)."""
         files_transferred = 0
@@ -1264,7 +1273,7 @@ class RemoteSshLibrary:
     # File Transfer – Upload / Download
     # -------------------------
     @keyword("Put Remote File")
-    def put_remote_file(self, session_name: str, local_path: str, remote_path: str):
+    def put_remote_file(self, session_name: str, local_path: str, remote_path: str, mode: str = ""):
         """Uploads a local file to the remote host via SFTP.
 
         Arguments:
@@ -1272,6 +1281,9 @@ class RemoteSshLibrary:
         - ``local_path``: Path to the local file. Supports ``$MEM{KEY}`` expansion.
         - ``remote_path``: Destination path on the remote host.
           Supports ``$MEM{KEY}`` expansion.
+        - ``mode``: (optional) POSIX file permissions as octal string (e.g. ``0755``).
+          When given, SFTP ``chmod`` is applied after upload.
+          When omitted, file keeps server-default permissions.
 
         Behavior:
         - Expands ``$MEM{KEY}`` in both path parameters.
@@ -1290,6 +1302,11 @@ class RemoteSshLibrary:
         |     Open Remote Session      r1    buildserver01
         |     Put Remote File          r1    ${CURDIR}/artifact.zip    /tmp/artifact.zip
         |     Verify Remote File Exists    r1    /tmp/artifact.zip
+        |     Close Remote Session     r1
+        |
+        | Upload Script With Execute Permission
+        |     Open Remote Session      r1    buildserver01
+        |     Put Remote File          r1    ./deploy.sh    /opt/app/deploy.sh    0755
         |     Close Remote Session     r1
         """
         s = self._ensure_session(session_name)
@@ -1310,6 +1327,8 @@ class RemoteSshLibrary:
                 if remote_parent:
                     self._sftp_makedirs(sftp, remote_parent)
                 transferred = self._sftp_put_file(sftp, expanded_local, expanded_remote)
+                if mode:
+                    sftp.chmod(expanded_remote, int(mode, 8))
             finally:
                 sftp.close()
         else:
@@ -1327,6 +1346,8 @@ class RemoteSshLibrary:
             "bytes": transferred,
             "duration_ms": dur_ms,
         }
+        if mode:
+            response["mode"] = mode
         s["last_response"] = response
         self._log_transfer(response)
 
@@ -1394,7 +1415,7 @@ class RemoteSshLibrary:
         return response
 
     @keyword("Put Remote Directory")
-    def put_remote_directory(self, session_name: str, local_dir: str, remote_dir: str):
+    def put_remote_directory(self, session_name: str, local_dir: str, remote_dir: str, mode: str = ""):
         """Recursively uploads a local directory to the remote host via SFTP.
 
         Arguments:
@@ -1402,6 +1423,9 @@ class RemoteSshLibrary:
         - ``local_dir``: Path to the local directory. Supports ``$MEM{KEY}`` expansion.
         - ``remote_dir``: Destination directory on the remote host.
           Supports ``$MEM{KEY}`` expansion.
+        - ``mode``: (optional) POSIX file permissions as octal string (e.g. ``0755``).
+          When given, SFTP ``chmod`` is applied to all uploaded files.
+          When omitted, files keep server-default permissions.
 
         Behavior:
         - Expands ``$MEM{KEY}`` in both path parameters.
@@ -1422,6 +1446,11 @@ class RemoteSshLibrary:
         |     Put Remote Directory       r1    ${CURDIR}/dist    /opt/app/dist
         |     Verify Remote Directory Exists    r1    /opt/app/dist
         |     Close Remote Session       r1
+        |
+        | Deploy Scripts With Execute Permission
+        |     Open Remote Session        r1    appserver
+        |     Put Remote Directory       r1    ${CURDIR}/scripts    /opt/app/scripts    0755
+        |     Close Remote Session       r1
         """
         s = self._ensure_session(session_name)
 
@@ -1437,6 +1466,9 @@ class RemoteSshLibrary:
             sftp = self._open_sftp(session_name)
             try:
                 files, dirs, total_bytes = self._sftp_put_dir(sftp, expanded_local, expanded_remote)
+                if mode:
+                    mode_int = int(mode, 8)
+                    self._sftp_chmod_recursive(sftp, expanded_remote, mode_int)
             finally:
                 sftp.close()
         else:
@@ -1907,6 +1939,181 @@ class RemoteSshLibrary:
             self._fmt_block("command", "SFTP listdir()"),
             self._fmt_block("path", expanded_dir),
             f"entries: {len(entries)}",
+            f"stored as: $MEM{{{key}}}",
+        ])
+        logger.info(msg)
+
+    # -------------------------
+    # File Transfer – Permissions (SFTP chmod/stat)
+    # -------------------------
+
+    def _format_mode(self, st_mode: int) -> str:
+        """Formats file mode as 4-digit octal string (e.g. '0755')."""
+        return f"{stat.S_IMODE(st_mode):04o}"
+
+    @keyword("Set Remote File Mode")
+    def set_remote_file_mode(self, session_name: str, remote_path: str, mode: str):
+        """Changes file permissions on the remote host via SFTP chmod.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_path``: Path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``mode``: POSIX permissions as octal string (e.g. ``0755``, ``0644``).
+          Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE`` on any parameter: Skips the operation (PASS).
+
+        Uses SFTP ``chmod()`` — no shell command, platform-independent.
+
+        Example (``set_remote_file_mode.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Make Script Executable
+        |     Open Remote Session         r1    appserver
+        |     Set Remote File Mode        r1    /opt/app/deploy.sh    0755
+        |     Verify Remote File Mode     r1    /opt/app/deploy.sh    0755
+        |     Close Remote Session        r1
+        """
+        self._ensure_session(session_name)
+
+        expanded_path = expand_mem(remote_path, self._store)
+        expanded_mode = expand_mem(mode, self._store)
+
+        if self._check_ignore(expanded_path):
+            return
+        if self._check_ignore(expanded_mode):
+            return
+
+        mode_int = int(expanded_mode, 8)
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                sftp.chmod(expanded_path, mode_int)
+            finally:
+                sftp.close()
+        else:
+            logger.info(f"STUB: Set Remote File Mode -> {expanded_path} mode={expanded_mode}")
+            return
+
+        msg = "\n".join([
+            self._fmt_block("command", "SFTP chmod()"),
+            self._fmt_block("path", expanded_path),
+            f"mode: {expanded_mode}",
+        ])
+        logger.info(msg)
+
+    @keyword("Verify Remote File Mode")
+    def verify_remote_file_mode(self, session_name: str, remote_path: str, expected: str):
+        """Verifies the file permissions on the remote host via SFTP stat.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_path``: Path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``expected``: Expected permissions as octal string (e.g. ``0755``).
+          Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE`` on any parameter: Skips verification (PASS).
+
+        Uses SFTP ``stat()`` — no shell command, platform-independent.
+
+        Example (``verify_remote_file_mode.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Config File Is Not World Readable
+        |     Open Remote Session          r1    appserver
+        |     Verify Remote File Mode      r1    /opt/app/config.yaml    0640
+        |     Close Remote Session         r1
+        """
+        self._ensure_session(session_name)
+
+        expanded_path = expand_mem(remote_path, self._store)
+        expanded_expected = expand_mem(expected, self._store)
+
+        if self._check_ignore(expanded_path):
+            return
+        if self._check_ignore(expanded_expected):
+            return
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                st = sftp.stat(expanded_path)
+            finally:
+                sftp.close()
+            actual = self._format_mode(st.st_mode)
+        else:
+            logger.info(f"STUB: Verify Remote File Mode -> {expanded_path} (expected={expanded_expected})")
+            return
+
+        msg = "\n".join([
+            self._fmt_block("command", "SFTP stat()"),
+            self._fmt_block("path", expanded_path),
+            f"mode: {actual}",
+            f"expected: {expanded_expected}",
+        ])
+        logger.info(msg)
+
+        if actual != expanded_expected:
+            raise OkwAssertionError(
+                f"[{session_name}] file mode: {expanded_path}\n"
+                f"Mode mismatch: actual={actual}, expected={expanded_expected}."
+            )
+
+    @keyword("Memorize Remote File Mode")
+    def memorize_remote_file_mode(self, session_name: str, remote_path: str, key: str):
+        """Reads the file permissions and stores them in the value store for ``$MEM{KEY}`` expansion.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_path``: Path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``key``: The key name for ``$MEM{KEY}`` references in subsequent keywords.
+
+        Special tokens:
+        - ``$IGNORE`` on ``remote_path``: Skips the operation (PASS).
+
+        Uses SFTP ``stat()`` — no shell command, platform-independent.
+
+        Example (``memorize_remote_file_mode.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Store And Compare File Mode
+        |     Open Remote Session              r1    appserver
+        |     Memorize Remote File Mode        r1    /opt/app/deploy.sh    DEPLOY_MODE
+        |     Verify Remote File Mode          r1    /opt/app/other.sh     $MEM{DEPLOY_MODE}
+        |     Close Remote Session             r1
+        """
+        self._ensure_session(session_name)
+
+        expanded_path = expand_mem(remote_path, self._store)
+        if self._check_ignore(expanded_path):
+            return
+
+        if self._backend == "paramiko":
+            sftp = self._open_sftp(session_name)
+            try:
+                st = sftp.stat(expanded_path)
+            finally:
+                sftp.close()
+            mode_str = self._format_mode(st.st_mode)
+        else:
+            logger.info(f"STUB: Memorize Remote File Mode -> {expanded_path}")
+            return
+
+        self._store[key] = mode_str
+
+        msg = "\n".join([
+            self._fmt_block("command", "SFTP stat()"),
+            self._fmt_block("path", expanded_path),
+            f"mode: {mode_str}",
             f"stored as: $MEM{{{key}}}",
         ])
         logger.info(msg)

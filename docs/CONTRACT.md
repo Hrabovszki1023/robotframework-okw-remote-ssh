@@ -85,6 +85,19 @@ All keywords use SFTP ``listdir()`` — no shell command, platform-independent.
 |---------|-----------|-------------|
 | `Memorize Remote Directory Contents` | `<session>` `<remote_dir>` `<key>` | Stores directory listing (newline-separated) in `$MEM{KEY}` |
 
+### File Transfer – Permissions (SFTP chmod/stat)
+
+All keywords use SFTP ``chmod()``/``stat()`` — no shell command, platform-independent.
+
+| Keyword | Parameters | Description |
+|---------|-----------|-------------|
+| `Set Remote File Mode` | `<session>` `<remote_path>` `<mode>` | Sets file permissions via SFTP chmod. `mode` is octal (e.g. `0755`). |
+| `Verify Remote File Mode` | `<session>` `<remote_path>` `<expected>` | Verifies file permissions via SFTP stat. EXACT match only (octal). |
+| `Memorize Remote File Mode` | `<session>` `<remote_path>` `<key>` | Reads file permissions and stores as `$MEM{KEY}` (4-digit octal). |
+
+`Put Remote File` and `Put Remote Directory` accept an optional `mode` parameter
+to set permissions immediately after upload.
+
 ### File Transfer – Clear (delete files, keep directory structure)
 
 | Keyword | Parameters | Description |

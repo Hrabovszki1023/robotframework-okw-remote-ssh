@@ -170,6 +170,16 @@ The expected parameter accepts `YES`/`NO`, `TRUE`/`FALSE`, or `1`/`0` (case-inse
 |---------|-------------|
 | `Memorize Remote Directory Contents` | Stores directory listing (newline-separated) in `$MEM{KEY}` |
 
+### File Transfer -- Permissions
+
+| Keyword | Description |
+|---------|-------------|
+| `Set Remote File Mode` | Sets file permissions via SFTP chmod (e.g. `0755`) |
+| `Verify Remote File Mode` | Verifies file permissions via SFTP stat (EXACT octal match) |
+| `Memorize Remote File Mode` | Stores file permissions (4-digit octal) in `$MEM{KEY}` |
+
+`Put Remote File` and `Put Remote Directory` accept an optional `mode` parameter.
+
 ### File Transfer -- Clear
 
 | Keyword | Description |
