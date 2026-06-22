@@ -635,6 +635,43 @@ class RemoteSshLibrary:
                 pass
         del self._sessions[session_name]
 
+    @keyword("Close All Remote Sessions")
+    def close_all_remote_sessions(self):
+        """Closes all open SSH sessions and releases all resources.
+
+        Intended for suite-level teardown to prevent session leaks on test abort.
+        Idempotent: if no sessions are open, the keyword returns PASS.
+
+        Each closed session is logged by name.
+
+        Example (``close_all_sessions.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary
+        | Suite Teardown    Close All Remote Sessions
+        |
+        | *** Test Cases ***
+        | Multi Server Check
+        |     Open Remote Session     web    webserver
+        |     Open Remote Session     db     dbserver
+        |     Execute Remote           web    curl -s http://localhost
+        |     Execute Remote           db     pg_isready
+        |     # Suite Teardown closes both sessions automatically
+        """
+        names = list(self._sessions.keys())
+        if not names:
+            logger.info("No open sessions to close.")
+            return
+        for name in names:
+            client = self._sessions[name].get("client")
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            del self._sessions[name]
+            logger.info(f"Closed session: {name}")
+        logger.info(f"Closed {len(names)} session(s): {', '.join(names)}")
+
     # -------------------------
     # Action
     # -------------------------

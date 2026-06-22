@@ -98,6 +98,7 @@ Passwords are stored separately in `~/.okw/secrets.yaml` (never in the repositor
 |---------|-------------|
 | `Open Remote Session` | Opens a named SSH session using a YAML config reference |
 | `Close Remote Session` | Closes the session and releases all resources |
+| `Close All Remote Sessions` | Closes all open sessions (idempotent, for suite teardown) |
 
 ### Execution
 

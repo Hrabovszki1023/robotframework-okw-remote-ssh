@@ -10,6 +10,7 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 |---------|-----------|-------------|
 | `Open Remote Session` | `<session>` `<config_ref>` | Opens a named session using `<config_dir>/<config_ref>.yaml` |
 | `Close Remote Session` | `<session>` | Closes session and releases resources |
+| `Close All Remote Sessions` | — | Closes all open sessions. Idempotent (PASS when none open). |
 
 ### Execution
 
