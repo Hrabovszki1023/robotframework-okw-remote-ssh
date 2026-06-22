@@ -1,0 +1,60 @@
+name: New Keyword
+about: Propose a new keyword for okw-remote-ssh
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why is this keyword needed? Reference comparisons, use cases, or gaps.
+      placeholder: "Feature comparison with ... identified ... as a gap."
+    validations:
+      required: true
+  - type: textarea
+    id: keywords
+    attributes:
+      label: Proposed Keywords
+      description: "Keyword name(s), parameters, match modes, and Robot Framework examples."
+      placeholder: |
+        **`Verify Remote ...`**
+
+        Parameters: `<session>` `<remote_path>` `<expected>`
+
+        ```robot
+        Verify Remote ...    myhost    /opt/app    expected_value
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: signal-vs-noise
+    attributes:
+      label: Signal vs. NOISE
+      description: "How does this keyword reduce NOISE compared to the alternative (e.g. Execute Remote + manual verification)?"
+      placeholder: "Without this keyword, the tester must ..."
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Keyword-specific criteria (what exactly must work).
+      placeholder: |
+        - [ ] Keyword implemented
+        - [ ] `$IGNORE` token support
+        - [ ] `$MEM{KEY}` expansion
+        - [ ] ASR logging
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Implementation Checklist
+      description: Standard checklist for every new keyword.
+      options:
+        - label: "Code: `library.py` — implementation + docstring"
+        - label: "Contract: `docs/CONTRACT.md` — keyword table updated"
+        - label: "README: `README.md` — keyword overview table updated"
+        - label: "Prompt: `okw4robot/prompts/okw-testgenerator.md` — keywords + examples added"
+        - label: "Libdoc: regenerate `docs/RemoteSshLibrary.html` + `.json`"
+        - label: "Tests: contract tests + live tests added"
