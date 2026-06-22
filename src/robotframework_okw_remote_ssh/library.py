@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from robot.api.deco import keyword, library
-from okw_contract_utils import expand_mem, MatchMode, assert_match
+from okw_contract_utils import expand_mem, MatchMode, assert_match, is_match, OkwAssertionError
 from okw_contract_utils.tokens import is_ignore, is_empty_token, parse_yes_no, assert_exists
 from .secrets import SecretStore
 from robot.api import logger
@@ -1626,6 +1626,253 @@ class RemoteSshLibrary:
             logger.info(f"STUB: Verify Remote Directory Exists -> {expanded} (expected={yes_no.value})")
 
         assert_exists(dir_exists, yes_no, context=f"[{session_name}] directory: {expanded}")
+
+    # -------------------------
+    # File Transfer – Verify Directory Contents
+    # -------------------------
+
+    def _sftp_listdir(self, session_name: str, remote_dir: str) -> list[str]:
+        """Lists directory contents via SFTP. Returns sorted list of entry names."""
+        sftp = self._open_sftp(session_name)
+        try:
+            entries = sorted(sftp.listdir(remote_dir))
+        finally:
+            sftp.close()
+        return entries
+
+    def _verify_directory_contains(self, session_name: str, remote_dir: str, expected: str, mode: MatchMode):
+        """Shared implementation for Verify Remote Directory Contains (EXACT/WCM/REGX)."""
+        self._ensure_session(session_name)
+
+        expanded_dir = expand_mem(remote_dir, self._store)
+        expanded_expected = expand_mem(expected, self._store)
+
+        if self._check_ignore(expanded_dir):
+            return
+        if self._check_ignore(expanded_expected):
+            return
+
+        if self._backend == "paramiko":
+            entries = self._sftp_listdir(session_name, expanded_dir)
+        else:
+            entries = []
+            logger.info(f"STUB: Verify Remote Directory Contains -> {expanded_dir} (expected={expanded_expected})")
+            return
+
+        found = any(is_match(entry, expanded_expected, mode).ok for entry in entries)
+
+        msg = "\n".join([
+            self._fmt_block("command", "SFTP listdir()"),
+            self._fmt_block("path", expanded_dir),
+            f"entries: {len(entries)}",
+            f"expected: {expanded_expected!r} (mode={mode.name})",
+            f"found: {'YES' if found else 'NO'}",
+        ])
+        logger.info(msg)
+
+        if not found:
+            raise OkwAssertionError(
+                f"[{session_name}] directory: {expanded_dir}\n"
+                f"No entry matching {expanded_expected!r} (mode={mode.name}).\n"
+                f"Entries: {entries}"
+            )
+
+    @keyword("Verify Remote Directory Contains")
+    def verify_remote_directory_contains(self, session_name: str, remote_dir: str, expected: str):
+        """Verifies that the remote directory contains an entry matching the expected name (EXACT match).
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``expected``: Expected entry name. Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+
+        Uses SFTP ``listdir()`` — no shell command, platform-independent.
+
+        Example (``verify_directory_contains.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Deploy Script Was Uploaded
+        |     Open Remote Session                    r1    appserver
+        |     Put Remote File                        r1    ./deploy.sh    /opt/app/deploy.sh
+        |     Verify Remote Directory Contains       r1    /opt/app    deploy.sh
+        |     Close Remote Session                   r1
+        """
+        self._verify_directory_contains(session_name, remote_dir, expected, MatchMode.EXACT)
+
+    @keyword("Verify Remote Directory Contains WCM")
+    def verify_remote_directory_contains_wcm(self, session_name: str, remote_dir: str, pattern: str):
+        """Verifies that the remote directory contains an entry matching a wildcard pattern.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``pattern``: Wildcard pattern (``*`` = any chars, ``?`` = one char).
+          Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+
+        Uses SFTP ``listdir()`` — no shell command, platform-independent.
+
+        Example (``verify_directory_contains_wcm.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Shell Scripts Exist In App Directory
+        |     Open Remote Session                        r1    appserver
+        |     Verify Remote Directory Contains WCM      r1    /opt/app    *.sh
+        |     Close Remote Session                       r1
+        """
+        self._verify_directory_contains(session_name, remote_dir, pattern, MatchMode.WCM)
+
+    @keyword("Verify Remote Directory Contains REGX")
+    def verify_remote_directory_contains_regx(self, session_name: str, remote_dir: str, regex: str):
+        """Verifies that the remote directory contains an entry matching a regular expression.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``regex``: Regular expression pattern. Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+
+        Uses SFTP ``listdir()`` — no shell command, platform-independent.
+
+        Example (``verify_directory_contains_regx.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Dated Backup File Exists
+        |     Open Remote Session                         r1    appserver
+        |     Verify Remote Directory Contains REGX      r1    /opt/backup    ^backup-\\d{8}\\.tar\\.gz$
+        |     Close Remote Session                        r1
+        """
+        self._verify_directory_contains(session_name, remote_dir, regex, MatchMode.REGX)
+
+    @keyword("Verify Remote Directory Count")
+    def verify_remote_directory_count(self, session_name: str, remote_dir: str, expected: str):
+        """Verifies the number of entries in a remote directory.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``expected``: Expected number of entries (as string). Supports ``$MEM{KEY}`` expansion.
+
+        Special tokens:
+        - ``$IGNORE``: Skips verification (PASS).
+
+        Uses SFTP ``listdir()`` — no shell command, platform-independent.
+
+        Example (``verify_directory_count.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Exactly Three Config Files
+        |     Open Remote Session                 r1    appserver
+        |     Verify Remote Directory Count      r1    /opt/app/config    3
+        |     Close Remote Session               r1
+        |
+        | Directory Is Empty After Cleanup
+        |     Open Remote Session                 r1    appserver
+        |     Clear Remote Directory              r1    /tmp/workdir
+        |     Verify Remote Directory Count      r1    /tmp/workdir    0
+        |     Close Remote Session               r1
+        """
+        self._ensure_session(session_name)
+
+        expanded_dir = expand_mem(remote_dir, self._store)
+        expanded_expected = expand_mem(expected, self._store)
+
+        if self._check_ignore(expanded_dir):
+            return
+        if self._check_ignore(expanded_expected):
+            return
+
+        expected_count = int(expanded_expected)
+
+        if self._backend == "paramiko":
+            entries = self._sftp_listdir(session_name, expanded_dir)
+        else:
+            entries = []
+            logger.info(f"STUB: Verify Remote Directory Count -> {expanded_dir} (expected={expanded_expected})")
+            return
+
+        actual_count = len(entries)
+
+        msg = "\n".join([
+            self._fmt_block("command", "SFTP listdir()"),
+            self._fmt_block("path", expanded_dir),
+            f"count: {actual_count}",
+            f"expected: {expected_count}",
+        ])
+        logger.info(msg)
+
+        if actual_count != expected_count:
+            raise OkwAssertionError(
+                f"[{session_name}] directory: {expanded_dir}\n"
+                f"Entry count mismatch: actual={actual_count}, expected={expected_count}.\n"
+                f"Entries: {entries}"
+            )
+
+    @keyword("Memorize Remote Directory Contents")
+    def memorize_remote_directory_contents(self, session_name: str, remote_dir: str, key: str):
+        """Lists the contents of a remote directory and stores them in the value store for ``$MEM{KEY}`` expansion.
+
+        Arguments:
+        - ``session_name``: The session to use (e.g. ``r1``).
+        - ``remote_dir``: Directory path on the remote host. Supports ``$MEM{KEY}`` expansion.
+        - ``key``: The key name for ``$MEM{KEY}`` references in subsequent keywords.
+
+        The directory contents are stored as a newline-separated string (sorted alphabetically).
+
+        Special tokens:
+        - ``$IGNORE`` on ``remote_dir``: Skips the operation (PASS).
+
+        Uses SFTP ``listdir()`` — no shell command, platform-independent.
+
+        Example (``memorize_directory_contents.robot``):
+        | *** Settings ***
+        | Library    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko
+        |
+        | *** Test Cases ***
+        | Store And Log Directory Contents
+        |     Open Remote Session                      r1    appserver
+        |     Memorize Remote Directory Contents       r1    /opt/app    APP_FILES
+        |     Execute Remote                            r1    echo $MEM{APP_FILES}
+        |     Close Remote Session                     r1
+        """
+        self._ensure_session(session_name)
+
+        expanded_dir = expand_mem(remote_dir, self._store)
+        if self._check_ignore(expanded_dir):
+            return
+
+        if self._backend == "paramiko":
+            entries = self._sftp_listdir(session_name, expanded_dir)
+        else:
+            entries = []
+            logger.info(f"STUB: Memorize Remote Directory Contents -> {expanded_dir}")
+            return
+
+        value = "\n".join(entries)
+        self._store[key] = value
+
+        msg = "\n".join([
+            self._fmt_block("command", "SFTP listdir()"),
+            self._fmt_block("path", expanded_dir),
+            f"entries: {len(entries)}",
+            f"stored as: $MEM{{{key}}}",
+        ])
+        logger.info(msg)
 
     # -------------------------
     # File Transfer – Clear (delete files, keep directory structure)

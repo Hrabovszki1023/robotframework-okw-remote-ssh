@@ -154,6 +154,21 @@ Passwords are stored separately in `~/.okw/secrets.yaml` (never in the repositor
 
 The expected parameter accepts `YES`/`NO`, `TRUE`/`FALSE`, or `1`/`0` (case-insensitive).
 
+### File Transfer -- Verify Directory Contents
+
+| Keyword | Description |
+|---------|-------------|
+| `Verify Remote Directory Contains` | EXACT name match against directory entries |
+| `Verify Remote Directory Contains WCM` | Wildcard match (`*`, `?`) against directory entries |
+| `Verify Remote Directory Contains REGX` | Regex match against directory entries |
+| `Verify Remote Directory Count` | Verifies number of entries in directory |
+
+### File Transfer -- Memorize
+
+| Keyword | Description |
+|---------|-------------|
+| `Memorize Remote Directory Contents` | Stores directory listing (newline-separated) in `$MEM{KEY}` |
+
 ### File Transfer -- Clear
 
 | Keyword | Description |

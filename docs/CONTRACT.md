@@ -67,6 +67,23 @@ This document defines the public contract of `robotframework-okw-remote-ssh`.
 The ``expected`` parameter accepts ``YES``/``NO``, ``TRUE``/``FALSE``, or ``1``/``0`` (case-insensitive).
 This follows the OKW ``YES/NO`` existence model defined in ``okw-contract-utils``.
 
+### File Transfer – Verify Directory Contents
+
+All keywords use SFTP ``listdir()`` — no shell command, platform-independent.
+
+| Keyword | Parameters | Description |
+|---------|-----------|-------------|
+| `Verify Remote Directory Contains` | `<session>` `<remote_dir>` `<expected>` | EXACT name match against directory entries |
+| `Verify Remote Directory Contains WCM` | `<session>` `<remote_dir>` `<pattern>` | Wildcard match (`*` = any chars, `?` = one char) |
+| `Verify Remote Directory Contains REGX` | `<session>` `<remote_dir>` `<regex>` | Regex match against directory entries |
+| `Verify Remote Directory Count` | `<session>` `<remote_dir>` `<expected>` | Verifies number of entries in directory |
+
+### File Transfer – Memorize Directory Contents
+
+| Keyword | Parameters | Description |
+|---------|-----------|-------------|
+| `Memorize Remote Directory Contents` | `<session>` `<remote_dir>` `<key>` | Stores directory listing (newline-separated) in `$MEM{KEY}` |
+
 ### File Transfer – Clear (delete files, keep directory structure)
 
 | Keyword | Parameters | Description |

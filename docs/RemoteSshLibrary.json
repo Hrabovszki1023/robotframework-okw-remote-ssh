@@ -1,9 +1,9 @@
 {
   "specversion": 3,
   "name": "robotframework_okw_remote_ssh.RemoteSshLibrary",
-  "doc": "<p>Standalone Robot Framework library for deterministic remote interaction via SSH.</p>\n<h2 id=\"Overview\">Overview</h2>\n<p>This library provides session-based remote command execution and structured verification keywords. It follows the OKW contract-first design: action keywords (<code>Execute Remote</code>) write to <code>last_response</code>, verification keywords read from it.</p>\n<h2 id=\"Three-Phase Model\">Three-Phase Model</h2>\n<p>All keywords in this library follow a fixed three-phase pattern:</p>\n<table border=\"1\">\n<tr>\n<td><b>Phase</b></td>\n<td><b>Keywords</b></td>\n<td><b>Purpose</b></td>\n</tr>\n<tr>\n<td>Prepare</td>\n<td><code>Set Remote</code></td>\n<td>Queue commands (no SSH call)</td>\n</tr>\n<tr>\n<td>Execute</td>\n<td><code>Execute Remote</code>, <code>Execute Remote And Continue</code></td>\n<td>Send commands and store result</td>\n</tr>\n<tr>\n<td>Verify</td>\n<td><code>Verify Remote Response</code>, <code>Verify Remote Stderr</code>, <code>Verify Remote Exit Code</code>, ...</td>\n<td>Evaluate stored result</td>\n</tr>\n</table>\n<p><b>Prepare</b> is optional \u2014 <code>Execute Remote</code> can also be called directly with a command parameter. When multiple <code>Set Remote</code> calls are queued, <code>Execute Remote</code> joins them with <code>&amp;&amp;</code> and sends them as a single SSH call. This preserves shell context (working directory, variables) across multiple commands.</p>\n<p><b>Execute</b> writes the result (stdout, stderr, exit_code, duration_ms) to <code>last_response</code>. Only after that can the <b>Verify</b> keywords access it.</p>\n<p>Example using all three phases:</p>\n<pre>\n# Prepare\nSet Remote                   r1    cd /opt/app\nSet Remote                   r1    ls -la\n# Execute\nExecute Remote               r1\n# Verify\nVerify Remote Response WCM   r1    <b>app</b>\nVerify Remote Exit Code      r1    0\n</pre>\n<h2 id=\"Session Management\">Session Management</h2>\n<p>Multiple sessions can be opened concurrently, each referenced by an <b>abstract</b> session name (e.g. <code>r1</code>). The abstract name is a freely chosen identifier that decouples the test logic from concrete connection details. The concrete connection parameters are loaded from a YAML file in the configured <code>config_dir</code> directory (default: <code>remotes/</code>).</p>\n<table border=\"1\">\n<tr>\n<td><b>Level</b></td>\n<td><b>Description</b></td>\n<td><b>Example</b></td>\n</tr>\n<tr>\n<td>Abstract</td>\n<td>Session name in the test case</td>\n<td><code>r1</code></td>\n</tr>\n<tr>\n<td>Concrete</td>\n<td>YAML file with connection data</td>\n<td><code>remotes/buildserver01.yaml</code></td>\n</tr>\n</table>\n<p>The YAML file contains all concrete connection details for one remote host. The <code>password</code> field must <b>*never*</b> appear in this file; authentication credentials are resolved from the local secrets file (see <i>Secrets</i> below).</p>\n<p><b>Remote configuration template</b> (<code>remotes/&lt;config_ref&gt;.yaml</code>):</p>\n<pre>\n# --------------------------------------------------\n# Remote Definition: buildserver01\n# Path: remotes/buildserver01.yaml\n# --------------------------------------------------\n\n# Hostname or IP address of the target host\nhost: \"192.168.1.100\"\n\n# SSH port (default: 22)\nport: 22\n\n# Username for SSH authentication\nusername: \"deploy\"\n\n# Connection and command timeout in seconds (default: 10)\ntimeout: 10\n\n# Output encoding (default: utf-8)\nencoding: \"utf-8\"\n\n# Authentication\nauth:\n  # Authentication type (currently only \"password\" supported)\n  type: password\n  # Reference to the entry in ~/.okw/secrets.yaml\n  secret_id: \"buildserver01/deploy\"\n</pre>\n<table border=\"1\">\n<tr>\n<td><b>Field</b></td>\n<td><b>Required</b></td>\n<td><b>Default</b></td>\n<td><b>Abstract / Concrete</b></td>\n<td><b>Description</b></td>\n</tr>\n<tr>\n<td>host</td>\n<td>Yes</td>\n<td></td>\n<td>Concrete</td>\n<td>Hostname or IP address</td>\n</tr>\n<tr>\n<td>port</td>\n<td>No</td>\n<td>22</td>\n<td>Concrete</td>\n<td>SSH port</td>\n</tr>\n<tr>\n<td>username</td>\n<td>Yes</td>\n<td></td>\n<td>Concrete</td>\n<td>SSH username</td>\n</tr>\n<tr>\n<td>timeout</td>\n<td>No</td>\n<td>10</td>\n<td>Concrete</td>\n<td>Timeout in seconds</td>\n</tr>\n<tr>\n<td>encoding</td>\n<td>No</td>\n<td>utf-8</td>\n<td>Concrete</td>\n<td>Output encoding</td>\n</tr>\n<tr>\n<td>auth.type</td>\n<td>Yes</td>\n<td></td>\n<td>Concrete</td>\n<td>Authentication type (<code>password</code>)</td>\n</tr>\n<tr>\n<td>auth.secret_id</td>\n<td>Yes</td>\n<td></td>\n<td>Abstract</td>\n<td>Reference to <code>~/.okw/secrets.yaml</code></td>\n</tr>\n</table>\n<h2 id=\"Secrets\">Secrets</h2>\n<p>Passwords are never stored in the repository. They are resolved from a local secrets file (default: <code>~/.okw/secrets.yaml</code>). The remote YAML configuration references secrets via <code>auth.secret_id</code>.</p>\n<table border=\"1\">\n<tr>\n<td><b>Level</b></td>\n<td><b>Description</b></td>\n<td><b>Example</b></td>\n</tr>\n<tr>\n<td>Abstract</td>\n<td><code>secret_id</code> in the remote YAML</td>\n<td><code>\"buildserver01/deploy\"</code></td>\n</tr>\n<tr>\n<td>Concrete</td>\n<td>Password in the secrets file</td>\n<td>Entry in <code>~/.okw/secrets.yaml</code></td>\n</tr>\n</table>\n<p><b>Secrets file template</b> (<code>~/.okw/secrets.yaml</code>):</p>\n<pre>\n# --------------------------------------------------\n# OKW Secrets \u2013 DO NOT commit to the repository!\n# Path: ~/.okw/secrets.yaml  (Linux/macOS)\n#        %USERPROFILE%\\.okw\\secrets.yaml  (Windows)\n# --------------------------------------------------\n\nsecrets:\n  # Abstract: secret_id -&gt; Concrete: password\n  #\n  # Each entry corresponds to an auth.secret_id\n  # from a remote YAML configuration.\n\n  # Password for buildserver01, user deploy\n  buildserver01/deploy:\n    password: \"S3cur3!Pass#2025\"\n\n  # Password for appserver, user admin\n  appserver/admin:\n    password: \"Adm1n_Pa$$w0rd\"\n\n  # Password for testnode, user root\n  testnode/root:\n    password: \"T3stR00t!\"\n</pre>\n<table border=\"1\">\n<tr>\n<td><b>Field</b></td>\n<td><b>Abstract / Concrete</b></td>\n<td><b>Description</b></td>\n</tr>\n<tr>\n<td><code>secrets</code></td>\n<td></td>\n<td>Top-level mapping (required)</td>\n</tr>\n<tr>\n<td><code>secrets.&lt;secret_id&gt;</code></td>\n<td>Abstract</td>\n<td>Key = <code>auth.secret_id</code> from remote YAML</td>\n</tr>\n<tr>\n<td><span class=\"name\">`secrets.&lt;secret_id&gt;.password</span>`| Concrete</td>\n<td>The actual password</td>\n<td></td>\n</tr>\n</table>\n<p><b>Security notes:</b></p>\n<table border=\"1\">\n<tr>\n<td><b>Rule</b></td>\n</tr>\n<tr>\n<td>The secrets file is stored outside the repository (in the home directory).</td>\n</tr>\n<tr>\n<td>Passwords are kept in memory only, never logged.</td>\n</tr>\n<tr>\n<td>If the remote YAML contains a password field, an error is raised immediately.</td>\n</tr>\n</table>\n<h2 id=\"Command Execution\">Command Execution</h2>\n<p>Commands can be executed in two ways:</p>\n<p><b>Single command</b> \u2013 <code>Execute Remote</code> with a command parameter sends one command immediately via SSH:</p>\n<pre>\nExecute Remote    r1    whoami\n</pre>\n<p><b>Queued commands</b> \u2013 <code>Set Remote</code> collects commands in an internal queue. Calling <code>Execute Remote</code> without a command parameter joins all queued entries with <code>&amp;&amp;</code> and sends them as a single SSH call. This preserves shell context (working directory, variables) across multiple commands:</p>\n<pre>\nSet Remote        r1    cd /opt/app\nSet Remote        r1    ls -la\nExecute Remote    r1\n</pre>\n<p>This executes <code>cd /opt/app &amp;&amp; ls -la</code> in one SSH channel.</p>\n<p><b>Tolerant execution</b> \u2013 <code>Execute Remote And Continue</code> works exactly like <code>Execute Remote</code> (single or queued), but never fails on a nonzero exit code. This is useful for commands that are expected to fail:</p>\n<pre>\nExecute Remote And Continue    r1    cat /no/such/file\nVerify Remote Exit Code        r1    1\n</pre>\n<table border=\"1\">\n<tr>\n<td><b>Keyword</b></td>\n<td><b>Behavior</b></td>\n</tr>\n<tr>\n<td><code>Set Remote</code></td>\n<td>Queues a command (no SSH call)</td>\n</tr>\n<tr>\n<td><code>Execute Remote</code></td>\n<td>With command: immediate execution. Without: joins queue and executes</td>\n</tr>\n<tr>\n<td><code>Execute Remote And Continue</code></td>\n<td>Same as <code>Execute Remote</code>, but no FAIL on exit_code != 0</td>\n</tr>\n</table>\n<h2 id=\"Value Expansion\">Value Expansion</h2>\n<p>All command, expected, and expr parameters support <code>$MEM{KEY}</code> expansion. Missing keys cause immediate FAIL.</p>\n<h2 id=\"OKW Global Tokens\">OKW Global Tokens</h2>\n<table border=\"1\">\n<tr>\n<td><b>Token</b></td>\n<td><b>Supported</b></td>\n<td><b>Behavior</b></td>\n</tr>\n<tr>\n<td>$IGNORE</td>\n<td>Yes</td>\n<td>Skips execution or verification (PASS, no SSH call)</td>\n</tr>\n<tr>\n<td>$EMPTY</td>\n<td>Yes</td>\n<td>Asserts that the checked field is empty</td>\n</tr>\n<tr>\n<td>$DELETE</td>\n<td>No</td>\n<td>Not implemented in this library</td>\n</tr>\n</table>\n<h2 id=\"File Transfer\">File Transfer</h2>\n<p>This library provides SFTP-based file transfer keywords for uploading, downloading, verifying, and removing files and directories on the remote host. All transfer operations are synchronous and store transfer metrics in <code>last_response</code> (action, bytes, duration_ms, etc.).</p>\n<h2 id=\"Token Evaluation Order\">Token Evaluation Order</h2>\n<p>1. Robot variable expansion (e.g. <code>${IGNORE}</code> -&gt; <code>$IGNORE</code>) 2. OKW value expansion (<code>$MEM{KEY}</code> -&gt; stored value) 3. Token parsing (<code>$IGNORE</code>, <code>$EMPTY</code>) 4. Keyword execution / verification</p>\n<h2 id=\"Examples\">Examples</h2>\n<table border=\"1\">\n<tr>\n<td>Open Remote Session</td>\n<td>r1</td>\n<td>myserver</td>\n</tr>\n<tr>\n<td>Execute Remote</td>\n<td>r1</td>\n<td>whoami</td>\n</tr>\n<tr>\n<td>Verify Remote Response</td>\n<td>r1</td>\n<td>expecteduser</td>\n</tr>\n<tr>\n<td>Close Remote Session</td>\n<td>r1</td>\n<td></td>\n</tr>\n</table>",
+  "doc": "<p>Standalone Robot Framework library for deterministic remote interaction via SSH.</p>\n<h2 id=\"Runnable Examples\">Runnable Examples</h2>\n<p>Complete <code>.robot</code> examples for all OKW libraries are available in the <a href=\"https://github.com/Hrabovszki1023/okw-examples\">okw-examples</a> repository.</p>\n<h2 id=\"Overview\">Overview</h2>\n<p>This library provides session-based remote command execution and structured verification keywords. It follows the OKW contract-first design: action keywords (<code>Execute Remote</code>) write to <code>last_response</code>, verification keywords read from it.</p>\n<h2 id=\"Three-Phase Model\">Three-Phase Model</h2>\n<p>All keywords in this library follow a fixed three-phase pattern:</p>\n<table border=\"1\">\n<tr>\n<td><b>Phase</b></td>\n<td><b>Keywords</b></td>\n<td><b>Purpose</b></td>\n</tr>\n<tr>\n<td>Prepare</td>\n<td><code>Set Remote</code></td>\n<td>Queue commands (no SSH call)</td>\n</tr>\n<tr>\n<td>Execute</td>\n<td><code>Execute Remote</code>, <code>Execute Remote And Continue</code></td>\n<td>Send commands and store result</td>\n</tr>\n<tr>\n<td>Verify</td>\n<td><code>Verify Remote Response</code>, <code>Verify Remote Stderr</code>, <code>Verify Remote Exit Code</code>, ...</td>\n<td>Evaluate stored result</td>\n</tr>\n</table>\n<p><b>Prepare</b> is optional \u2014 <code>Execute Remote</code> can also be called directly with a command parameter. When multiple <code>Set Remote</code> calls are queued, <code>Execute Remote</code> joins them with <code>&amp;&amp;</code> and sends them as a single SSH call. This preserves shell context (working directory, variables) across multiple commands.</p>\n<p><b>Execute</b> writes the result (stdout, stderr, exit_code, duration_ms) to <code>last_response</code>. Only after that can the <b>Verify</b> keywords access it.</p>\n<p>Example using all three phases:</p>\n<pre>\n# Prepare\nSet Remote                   r1    cd /opt/app\nSet Remote                   r1    ls -la\n# Execute\nExecute Remote               r1\n# Verify\nVerify Remote Response WCM   r1    <b>app</b>\nVerify Remote Exit Code      r1    0\n</pre>\n<h2 id=\"Session Management\">Session Management</h2>\n<p>Multiple sessions can be opened concurrently, each referenced by an <b>abstract</b> session name (e.g. <code>r1</code>). The abstract name is a freely chosen identifier that decouples the test logic from concrete connection details. The concrete connection parameters are loaded from a YAML file in the configured <code>config_dir</code> directory (default: <code>remotes/</code>).</p>\n<table border=\"1\">\n<tr>\n<td><b>Level</b></td>\n<td><b>Description</b></td>\n<td><b>Example</b></td>\n</tr>\n<tr>\n<td>Abstract</td>\n<td>Session name in the test case</td>\n<td><code>r1</code></td>\n</tr>\n<tr>\n<td>Concrete</td>\n<td>YAML file with connection data</td>\n<td><code>remotes/buildserver01.yaml</code></td>\n</tr>\n</table>\n<p>The YAML file contains all concrete connection details for one remote host. The <code>password</code> field must <b>*never*</b> appear in this file; authentication credentials are resolved from the local secrets file (see <i>Secrets</i> below).</p>\n<p><b>Remote configuration template</b> (<code>remotes/&lt;config_ref&gt;.yaml</code>):</p>\n<pre>\n# --------------------------------------------------\n# Remote Definition: buildserver01\n# Path: remotes/buildserver01.yaml\n# --------------------------------------------------\n\n# Hostname or IP address of the target host\nhost: \"192.168.1.100\"\n\n# SSH port (default: 22)\nport: 22\n\n# Username for SSH authentication\nusername: \"deploy\"\n\n# Connection and command timeout in seconds (default: 10)\ntimeout: 10\n\n# Output encoding (default: utf-8)\nencoding: \"utf-8\"\n\n# Authentication\nauth:\n  # Authentication type (currently only \"password\" supported)\n  type: password\n  # Reference to the entry in ~/.okw/secrets.yaml\n  secret_id: \"buildserver01/deploy\"\n</pre>\n<table border=\"1\">\n<tr>\n<td><b>Field</b></td>\n<td><b>Required</b></td>\n<td><b>Default</b></td>\n<td><b>Abstract / Concrete</b></td>\n<td><b>Description</b></td>\n</tr>\n<tr>\n<td>host</td>\n<td>Yes</td>\n<td></td>\n<td>Concrete</td>\n<td>Hostname or IP address</td>\n</tr>\n<tr>\n<td>port</td>\n<td>No</td>\n<td>22</td>\n<td>Concrete</td>\n<td>SSH port</td>\n</tr>\n<tr>\n<td>username</td>\n<td>Yes</td>\n<td></td>\n<td>Concrete</td>\n<td>SSH username</td>\n</tr>\n<tr>\n<td>timeout</td>\n<td>No</td>\n<td>10</td>\n<td>Concrete</td>\n<td>Timeout in seconds</td>\n</tr>\n<tr>\n<td>encoding</td>\n<td>No</td>\n<td>utf-8</td>\n<td>Concrete</td>\n<td>Output encoding</td>\n</tr>\n<tr>\n<td>auth.type</td>\n<td>Yes</td>\n<td></td>\n<td>Concrete</td>\n<td>Authentication type (<code>password</code>)</td>\n</tr>\n<tr>\n<td>auth.secret_id</td>\n<td>Yes</td>\n<td></td>\n<td>Abstract</td>\n<td>Reference to <code>~/.okw/secrets.yaml</code></td>\n</tr>\n</table>\n<h2 id=\"Secrets\">Secrets</h2>\n<p>Passwords are never stored in the repository. They are resolved from a local secrets file (default: <code>~/.okw/secrets.yaml</code>). The remote YAML configuration references secrets via <code>auth.secret_id</code>.</p>\n<table border=\"1\">\n<tr>\n<td><b>Level</b></td>\n<td><b>Description</b></td>\n<td><b>Example</b></td>\n</tr>\n<tr>\n<td>Abstract</td>\n<td><code>secret_id</code> in the remote YAML</td>\n<td><code>\"buildserver01/deploy\"</code></td>\n</tr>\n<tr>\n<td>Concrete</td>\n<td>Password in the secrets file</td>\n<td>Entry in <code>~/.okw/secrets.yaml</code></td>\n</tr>\n</table>\n<p><b>Secrets file template</b> (<code>~/.okw/secrets.yaml</code>):</p>\n<pre>\n# --------------------------------------------------\n# OKW Secrets \u2013 DO NOT commit to the repository!\n# Path: ~/.okw/secrets.yaml  (Linux/macOS)\n#        %USERPROFILE%\\.okw\\secrets.yaml  (Windows)\n# --------------------------------------------------\n\nsecrets:\n  # Abstract: secret_id -&gt; Concrete: password\n  #\n  # Each entry corresponds to an auth.secret_id\n  # from a remote YAML configuration.\n\n  # Password for buildserver01, user deploy\n  buildserver01/deploy:\n    password: \"S3cur3!Pass#2025\"\n\n  # Password for appserver, user admin\n  appserver/admin:\n    password: \"Adm1n_Pa$$w0rd\"\n\n  # Password for testnode, user root\n  testnode/root:\n    password: \"T3stR00t!\"\n</pre>\n<table border=\"1\">\n<tr>\n<td><b>Field</b></td>\n<td><b>Abstract / Concrete</b></td>\n<td><b>Description</b></td>\n</tr>\n<tr>\n<td><code>secrets</code></td>\n<td></td>\n<td>Top-level mapping (required)</td>\n</tr>\n<tr>\n<td><code>secrets.&lt;secret_id&gt;</code></td>\n<td>Abstract</td>\n<td>Key = <code>auth.secret_id</code> from remote YAML</td>\n</tr>\n<tr>\n<td><span class=\"name\">`secrets.&lt;secret_id&gt;.password</span>`| Concrete</td>\n<td>The actual password</td>\n<td></td>\n</tr>\n</table>\n<p><b>Security notes:</b></p>\n<table border=\"1\">\n<tr>\n<td><b>Rule</b></td>\n</tr>\n<tr>\n<td>The secrets file is stored outside the repository (in the home directory).</td>\n</tr>\n<tr>\n<td>Passwords are kept in memory only, never logged.</td>\n</tr>\n<tr>\n<td>If the remote YAML contains a password field, an error is raised immediately.</td>\n</tr>\n</table>\n<h2 id=\"Command Execution\">Command Execution</h2>\n<p>Commands can be executed in two ways:</p>\n<p><b>Single command</b> \u2013 <code>Execute Remote</code> with a command parameter sends one command immediately via SSH:</p>\n<pre>\nExecute Remote    r1    whoami\n</pre>\n<p><b>Queued commands</b> \u2013 <code>Set Remote</code> collects commands in an internal queue. Calling <code>Execute Remote</code> without a command parameter joins all queued entries with <code>&amp;&amp;</code> and sends them as a single SSH call. This preserves shell context (working directory, variables) across multiple commands:</p>\n<pre>\nSet Remote        r1    cd /opt/app\nSet Remote        r1    ls -la\nExecute Remote    r1\n</pre>\n<p>This executes <code>cd /opt/app &amp;&amp; ls -la</code> in one SSH channel.</p>\n<p><b>Tolerant execution</b> \u2013 <code>Execute Remote And Continue</code> works exactly like <code>Execute Remote</code> (single or queued), but never fails on a nonzero exit code. This is useful for commands that are expected to fail:</p>\n<pre>\nExecute Remote And Continue    r1    cat /no/such/file\nVerify Remote Exit Code        r1    1\n</pre>\n<table border=\"1\">\n<tr>\n<td><b>Keyword</b></td>\n<td><b>Behavior</b></td>\n</tr>\n<tr>\n<td><code>Set Remote</code></td>\n<td>Queues a command (no SSH call)</td>\n</tr>\n<tr>\n<td><code>Execute Remote</code></td>\n<td>With command: immediate execution. Without: joins queue and executes</td>\n</tr>\n<tr>\n<td><code>Execute Remote And Continue</code></td>\n<td>Same as <code>Execute Remote</code>, but no FAIL on exit_code != 0</td>\n</tr>\n</table>\n<h2 id=\"Value Expansion\">Value Expansion</h2>\n<p>All command, expected, and expr parameters support <code>$MEM{KEY}</code> expansion. Missing keys cause immediate FAIL.</p>\n<h2 id=\"OKW Global Tokens\">OKW Global Tokens</h2>\n<table border=\"1\">\n<tr>\n<td><b>Token</b></td>\n<td><b>Supported</b></td>\n<td><b>Behavior</b></td>\n</tr>\n<tr>\n<td>$IGNORE</td>\n<td>Yes</td>\n<td>Skips execution or verification (PASS, no SSH call)</td>\n</tr>\n<tr>\n<td>$EMPTY</td>\n<td>Yes</td>\n<td>Asserts that the checked field is empty</td>\n</tr>\n<tr>\n<td>$DELETE</td>\n<td>No</td>\n<td>Not implemented in this library</td>\n</tr>\n</table>\n<h2 id=\"File Transfer\">File Transfer</h2>\n<p>This library provides SFTP-based file transfer keywords for uploading, downloading, verifying, and removing files and directories on the remote host. All transfer operations are synchronous and store transfer metrics in <code>last_response</code> (action, bytes, duration_ms, etc.).</p>\n<h2 id=\"Token Evaluation Order\">Token Evaluation Order</h2>\n<p>1. Robot variable expansion (e.g. <code>${IGNORE}</code> -&gt; <code>$IGNORE</code>) 2. OKW value expansion (<code>$MEM{KEY}</code> -&gt; stored value) 3. Token parsing (<code>$IGNORE</code>, <code>$EMPTY</code>) 4. Keyword execution / verification</p>\n<h2 id=\"Examples\">Examples</h2>\n<table border=\"1\">\n<tr>\n<td>Open Remote Session</td>\n<td>r1</td>\n<td>myserver</td>\n</tr>\n<tr>\n<td>Execute Remote</td>\n<td>r1</td>\n<td>whoami</td>\n</tr>\n<tr>\n<td>Verify Remote Response</td>\n<td>r1</td>\n<td>expecteduser</td>\n</tr>\n<tr>\n<td>Close Remote Session</td>\n<td>r1</td>\n<td></td>\n</tr>\n</table>",
   "version": "",
-  "generated": "2026-06-21T20:37:02+00:00",
+  "generated": "2026-06-22T10:44:05+00:00",
   "type": "LIBRARY",
   "scope": "GLOBAL",
   "docFormat": "HTML",
@@ -72,7 +72,7 @@
       "shortdoc": "Initialize self.  See help(type(self)) for accurate signature.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 231
+      "lineno": 237
     }
   ],
   "keywords": [
@@ -111,7 +111,7 @@
       "shortdoc": "Deletes all files directly in the remote directory. Directory structure is preserved.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1628
+      "lineno": 1881
     },
     {
       "name": "Clear Remote Directory Recursively",
@@ -148,7 +148,7 @@
       "shortdoc": "Deletes all files in the remote directory and its subdirectories. Directory structure is preserved.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1657
+      "lineno": 1910
     },
     {
       "name": "Close Remote Session",
@@ -172,7 +172,7 @@
       "shortdoc": "Closes an open SSH session and releases all resources.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 601
+      "lineno": 607
     },
     {
       "name": "Execute Remote",
@@ -209,7 +209,7 @@
       "shortdoc": "Executes a command on the remote host. Fails on nonzero exit code.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 688
+      "lineno": 694
     },
     {
       "name": "Execute Remote And Continue",
@@ -246,7 +246,7 @@
       "shortdoc": "Executes a command on the remote host. Does *not* fail on nonzero exit code.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 742
+      "lineno": 748
     },
     {
       "name": "Get Remote Directory",
@@ -296,7 +296,7 @@
       "shortdoc": "Recursively downloads a remote directory to the local filesystem via SFTP.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1428
+      "lineno": 1434
     },
     {
       "name": "Get Remote File",
@@ -346,7 +346,57 @@
       "shortdoc": "Downloads a file from the remote host to the local filesystem via SFTP.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1293
+      "lineno": 1299
+    },
+    {
+      "name": "Memorize Remote Directory Contents",
+      "args": [
+        {
+          "name": "session_name",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "session_name: str"
+        },
+        {
+          "name": "remote_dir",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "remote_dir: str"
+        },
+        {
+          "name": "key",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "key: str"
+        }
+      ],
+      "returnType": null,
+      "doc": "<p>Lists the contents of a remote directory and stores them in the value store for <code>$MEM{KEY}</code> expansion.</p>\n<p>Arguments:</p>\n<ul>\n<li><code>session_name</code>: The session to use (e.g. <code>r1</code>).</li>\n<li><code>remote_dir</code>: Directory path on the remote host. Supports <code>$MEM{KEY}</code> expansion.</li>\n<li><code>key</code>: The key name for <code>$MEM{KEY}</code> references in subsequent keywords.</li>\n</ul>\n<p>The directory contents are stored as a newline-separated string (sorted alphabetically).</p>\n<p>Special tokens:</p>\n<ul>\n<li><code>$IGNORE</code> on <code>remote_dir</code>: Skips the operation (PASS).</li>\n</ul>\n<p>Uses SFTP <code>listdir()</code> \u2014 no shell command, platform-independent.</p>\n<p>Example (<code>memorize_directory_contents.robot</code>):</p>\n<pre>\n<b>*</b> Settings <b>*</b>\nLibrary    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko\n\n<b>*</b> Test Cases <b>*</b>\nStore And Log Directory Contents\n    Open Remote Session                      r1    appserver\n    Memorize Remote Directory Contents       r1    /opt/app    APP_FILES\n    Execute Remote                            r1    echo $MEM{APP_FILES}\n    Close Remote Session                     r1\n</pre>",
+      "shortdoc": "Lists the contents of a remote directory and stores them in the value store for ``$MEM{KEY}`` expansion.",
+      "tags": [],
+      "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
+      "lineno": 1827
     },
     {
       "name": "Memorize Remote Response Field",
@@ -396,7 +446,7 @@
       "shortdoc": "Stores a field from the last response into the internal value store for later ``$MEM{KEY}`` expansion.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1188
+      "lineno": 1194
     },
     {
       "name": "Open Remote Session",
@@ -433,7 +483,7 @@
       "shortdoc": "Opens a named SSH session using a remote definition file.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 528
+      "lineno": 534
     },
     {
       "name": "Put Remote Directory",
@@ -483,7 +533,7 @@
       "shortdoc": "Recursively uploads a local directory to the remote host via SFTP.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1354
+      "lineno": 1360
     },
     {
       "name": "Put Remote File",
@@ -533,7 +583,7 @@
       "shortdoc": "Uploads a local file to the remote host via SFTP.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1224
+      "lineno": 1230
     },
     {
       "name": "Remove Remote Directory",
@@ -570,7 +620,7 @@
       "shortdoc": "Removes an empty directory on the remote host via SFTP. Idempotent.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1770
+      "lineno": 2023
     },
     {
       "name": "Remove Remote Directory Recursively",
@@ -607,7 +657,7 @@
       "shortdoc": "Removes a directory and all its contents on the remote host via SFTP. Idempotent.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1803
+      "lineno": 2056
     },
     {
       "name": "Remove Remote File",
@@ -644,7 +694,7 @@
       "shortdoc": "Removes a file on the remote host via SFTP. Idempotent.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1722
+      "lineno": 1975
     },
     {
       "name": "Set Remote",
@@ -681,7 +731,207 @@
       "shortdoc": "Queues a command for later execution via ``Execute Remote``.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 636
+      "lineno": 642
+    },
+    {
+      "name": "Verify Remote Directory Contains",
+      "args": [
+        {
+          "name": "session_name",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "session_name: str"
+        },
+        {
+          "name": "remote_dir",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "remote_dir: str"
+        },
+        {
+          "name": "expected",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "expected: str"
+        }
+      ],
+      "returnType": null,
+      "doc": "<p>Verifies that the remote directory contains an entry matching the expected name (EXACT match).</p>\n<p>Arguments:</p>\n<ul>\n<li><code>session_name</code>: The session to use (e.g. <code>r1</code>).</li>\n<li><code>remote_dir</code>: Directory path on the remote host. Supports <code>$MEM{KEY}</code> expansion.</li>\n<li><code>expected</code>: Expected entry name. Supports <code>$MEM{KEY}</code> expansion.</li>\n</ul>\n<p>Special tokens:</p>\n<ul>\n<li><code>$IGNORE</code>: Skips verification (PASS).</li>\n</ul>\n<p>Uses SFTP <code>listdir()</code> \u2014 no shell command, platform-independent.</p>\n<p>Example (<code>verify_directory_contains.robot</code>):</p>\n<pre>\n<b>*</b> Settings <b>*</b>\nLibrary    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko\n\n<b>*</b> Test Cases <b>*</b>\nDeploy Script Was Uploaded\n    Open Remote Session                    r1    appserver\n    Put Remote File                        r1    ./deploy.sh    /opt/app/deploy.sh\n    Verify Remote Directory Contains       r1    /opt/app    deploy.sh\n    Close Remote Session                   r1\n</pre>",
+      "shortdoc": "Verifies that the remote directory contains an entry matching the expected name (EXACT match).",
+      "tags": [],
+      "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
+      "lineno": 1681
+    },
+    {
+      "name": "Verify Remote Directory Contains REGX",
+      "args": [
+        {
+          "name": "session_name",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "session_name: str"
+        },
+        {
+          "name": "remote_dir",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "remote_dir: str"
+        },
+        {
+          "name": "regex",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "regex: str"
+        }
+      ],
+      "returnType": null,
+      "doc": "<p>Verifies that the remote directory contains an entry matching a regular expression.</p>\n<p>Arguments:</p>\n<ul>\n<li><code>session_name</code>: The session to use (e.g. <code>r1</code>).</li>\n<li><code>remote_dir</code>: Directory path on the remote host. Supports <code>$MEM{KEY}</code> expansion.</li>\n<li><code>regex</code>: Regular expression pattern. Supports <code>$MEM{KEY}</code> expansion.</li>\n</ul>\n<p>Special tokens:</p>\n<ul>\n<li><code>$IGNORE</code>: Skips verification (PASS).</li>\n</ul>\n<p>Uses SFTP <code>listdir()</code> \u2014 no shell command, platform-independent.</p>\n<p>Example (<code>verify_directory_contains_regx.robot</code>):</p>\n<pre>\n<b>*</b> Settings <b>*</b>\nLibrary    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko\n\n<b>*</b> Test Cases <b>*</b>\nDated Backup File Exists\n    Open Remote Session                         r1    appserver\n    Verify Remote Directory Contains REGX      r1    /opt/backup    ^backup-\\d{8}\\.tar\\.gz$\n    Close Remote Session                        r1\n</pre>",
+      "shortdoc": "Verifies that the remote directory contains an entry matching a regular expression.",
+      "tags": [],
+      "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
+      "lineno": 1735
+    },
+    {
+      "name": "Verify Remote Directory Contains WCM",
+      "args": [
+        {
+          "name": "session_name",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "session_name: str"
+        },
+        {
+          "name": "remote_dir",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "remote_dir: str"
+        },
+        {
+          "name": "pattern",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "pattern: str"
+        }
+      ],
+      "returnType": null,
+      "doc": "<p>Verifies that the remote directory contains an entry matching a wildcard pattern.</p>\n<p>Arguments:</p>\n<ul>\n<li><code>session_name</code>: The session to use (e.g. <code>r1</code>).</li>\n<li><code>remote_dir</code>: Directory path on the remote host. Supports <code>$MEM{KEY}</code> expansion.</li>\n<li><code>pattern</code>: Wildcard pattern (<code>*</code> = any chars, <code>?</code> = one char). Supports <code>$MEM{KEY}</code> expansion.</li>\n</ul>\n<p>Special tokens:</p>\n<ul>\n<li><code>$IGNORE</code>: Skips verification (PASS).</li>\n</ul>\n<p>Uses SFTP <code>listdir()</code> \u2014 no shell command, platform-independent.</p>\n<p>Example (<code>verify_directory_contains_wcm.robot</code>):</p>\n<pre>\n<b>*</b> Settings <b>*</b>\nLibrary    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko\n\n<b>*</b> Test Cases <b>*</b>\nShell Scripts Exist In App Directory\n    Open Remote Session                        r1    appserver\n    Verify Remote Directory Contains WCM      r1    /opt/app    *.sh\n    Close Remote Session                       r1\n</pre>",
+      "shortdoc": "Verifies that the remote directory contains an entry matching a wildcard pattern.",
+      "tags": [],
+      "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
+      "lineno": 1708
+    },
+    {
+      "name": "Verify Remote Directory Count",
+      "args": [
+        {
+          "name": "session_name",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "session_name: str"
+        },
+        {
+          "name": "remote_dir",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "remote_dir: str"
+        },
+        {
+          "name": "expected",
+          "type": {
+            "name": "str",
+            "typedoc": "string",
+            "nested": [],
+            "union": false
+          },
+          "defaultValue": null,
+          "kind": "POSITIONAL_OR_NAMED",
+          "required": true,
+          "repr": "expected: str"
+        }
+      ],
+      "returnType": null,
+      "doc": "<p>Verifies the number of entries in a remote directory.</p>\n<p>Arguments:</p>\n<ul>\n<li><code>session_name</code>: The session to use (e.g. <code>r1</code>).</li>\n<li><code>remote_dir</code>: Directory path on the remote host. Supports <code>$MEM{KEY}</code> expansion.</li>\n<li><code>expected</code>: Expected number of entries (as string). Supports <code>$MEM{KEY}</code> expansion.</li>\n</ul>\n<p>Special tokens:</p>\n<ul>\n<li><code>$IGNORE</code>: Skips verification (PASS).</li>\n</ul>\n<p>Uses SFTP <code>listdir()</code> \u2014 no shell command, platform-independent.</p>\n<p>Example (<code>verify_directory_count.robot</code>):</p>\n<pre>\n<b>*</b> Settings <b>*</b>\nLibrary    robotframework_okw_remote_ssh.RemoteSshLibrary    backend=paramiko\n\n<b>*</b> Test Cases <b>*</b>\nExactly Three Config Files\n    Open Remote Session                 r1    appserver\n    Verify Remote Directory Count      r1    /opt/app/config    3\n    Close Remote Session               r1\n\nDirectory Is Empty After Cleanup\n    Open Remote Session                 r1    appserver\n    Clear Remote Directory              r1    /tmp/workdir\n    Verify Remote Directory Count      r1    /tmp/workdir    0\n    Close Remote Session               r1\n</pre>",
+      "shortdoc": "Verifies the number of entries in a remote directory.",
+      "tags": [],
+      "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
+      "lineno": 1761
     },
     {
       "name": "Verify Remote Directory Exists",
@@ -731,7 +981,7 @@
       "shortdoc": "Verifies whether a directory exists on the remote host or not.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1560
+      "lineno": 1566
     },
     {
       "name": "Verify Remote Duration",
@@ -768,7 +1018,7 @@
       "shortdoc": "Verifies the execution duration (in milliseconds) of the last command.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1129
+      "lineno": 1135
     },
     {
       "name": "Verify Remote Exit Code",
@@ -805,7 +1055,7 @@
       "shortdoc": "Verifies the exit code of the last command (numeric exact compare).",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1077
+      "lineno": 1083
     },
     {
       "name": "Verify Remote File Exists",
@@ -855,7 +1105,7 @@
       "shortdoc": "Verifies whether a file exists on the remote host or not.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1496
+      "lineno": 1502
     },
     {
       "name": "Verify Remote Response",
@@ -892,7 +1142,7 @@
       "shortdoc": "Verifies that stdout of the last command matches the expected value (EXACT match).",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 861
+      "lineno": 867
     },
     {
       "name": "Verify Remote Response REGX",
@@ -929,7 +1179,7 @@
       "shortdoc": "Verifies that stdout of the last command matches a regular expression.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 933
+      "lineno": 939
     },
     {
       "name": "Verify Remote Response WCM",
@@ -966,7 +1216,7 @@
       "shortdoc": "Verifies that stdout of the last command matches a wildcard pattern.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 891
+      "lineno": 897
     },
     {
       "name": "Verify Remote Stderr",
@@ -1003,7 +1253,7 @@
       "shortdoc": "Verifies that stderr of the last command matches the expected value (EXACT match).",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 964
+      "lineno": 970
     },
     {
       "name": "Verify Remote Stderr REGX",
@@ -1040,7 +1290,7 @@
       "shortdoc": "Verifies that stderr of the last command matches a regular expression.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1043
+      "lineno": 1049
     },
     {
       "name": "Verify Remote Stderr WCM",
@@ -1077,7 +1327,7 @@
       "shortdoc": "Verifies that stderr of the last command matches a wildcard pattern.",
       "tags": [],
       "source": "D:\\work\\okw\\robotframework\\robotframework-okw-remote-ssh\\src\\robotframework_okw_remote_ssh\\library.py",
-      "lineno": 1004
+      "lineno": 1010
     }
   ],
   "typedocs": [
@@ -1105,6 +1355,7 @@
         "Execute Remote And Continue",
         "Get Remote Directory",
         "Get Remote File",
+        "Memorize Remote Directory Contents",
         "Memorize Remote Response Field",
         "Open Remote Session",
         "Put Remote Directory",
@@ -1113,6 +1364,10 @@
         "Remove Remote Directory Recursively",
         "Remove Remote File",
         "Set Remote",
+        "Verify Remote Directory Contains",
+        "Verify Remote Directory Contains REGX",
+        "Verify Remote Directory Contains WCM",
+        "Verify Remote Directory Count",
         "Verify Remote Directory Exists",
         "Verify Remote Duration",
         "Verify Remote Exit Code",
