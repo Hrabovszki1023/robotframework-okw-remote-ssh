@@ -21,6 +21,12 @@ except Exception:
 class RemoteSshLibrary:
     """Standalone Robot Framework library for deterministic remote interaction via SSH.
 
+    = Runnable Examples =
+
+    Complete ``.robot`` examples for all OKW libraries are available in the
+    [https://github.com/Hrabovszki1023/okw-examples|okw-examples]
+    repository.
+
     = Overview =
 
     This library provides session-based remote command execution and structured
