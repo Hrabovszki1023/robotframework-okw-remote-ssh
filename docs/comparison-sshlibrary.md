@@ -54,20 +54,58 @@ Reference: [SSHLibrary (MarketSquare)](https://github.com/MarketSquare/SSHLibrar
 
 ---
 
+## Directory Listing: SSHLibrary vs. OKW approach
+
+SSHLibrary provides three listing keywords:
+
+- `List Directory` — returns all items in a remote path
+- `List Files In Directory` — returns only files
+- `List Directories In Directory` — returns only directories
+
+All three return raw lists into Robot variables. The tester must then
+verify manually with BuiltIn keywords (`Length Should Be`,
+`Should Contain`, etc.). SSHLibrary has **no** verification keywords
+for directory contents — only `Directory Should Exist` / `Should Not Exist`.
+
+```robot
+# SSHLibrary pattern (NOISE — manual verification)
+@{files}=    List Files In Directory    /opt/app    *.sh
+Length Should Be    ${files}    3
+Should Contain      ${files}    deploy.sh
+```
+
+**OKW approach:** Instead of returning raw data, provide Verify and
+Memorize keywords that follow the Three-Phase Model. The directory
+listing happens internally — the test only expresses intent.
+
+```robot
+# OKW pattern (Signal — direct verification)
+Verify Remote Directory Contains    myhost    /opt/app    deploy.sh
+Verify Remote Directory Count       myhost    /opt/app    5
+Memorize Remote Directory Contents  myhost    /opt/app    APP_FILES
+```
+
+This avoids the list-then-check NOISE pattern and keeps test code
+focused on what matters: the expected state.
+
+---
+
 ## Recommended additions
 
 Based on this comparison, three features from SSHLibrary are worth adding
 to okw-remote-ssh. They fit the OKW philosophy (deterministic, verifiable)
 and address real gaps.
 
-1. **`List Remote Directory`** — List directory contents, verifiable via
-   `Verify Remote Response`. Common use case in infrastructure tests.
+1. **Directory content verification** (Issue #1) — Verify and Memorize
+   keywords for remote directory contents, following the OKW Three-Phase
+   Model instead of SSHLibrary's raw list approach.
 
-2. **`Close All Remote Sessions`** — Clean up all open sessions in one call.
-   Prevents session leaks on test abort. Useful in suite teardown.
+2. **`Close All Remote Sessions`** (Issue #2) — Clean up all open sessions
+   in one call. Prevents session leaks on test abort. Useful in suite teardown.
 
-3. **File permissions on `Put Remote File`** — Optional `mode` parameter
-   (e.g. `0755`). Important when uploading scripts that need to be executed.
+3. **File permissions on `Put Remote File`** (Issue #3) — Optional `mode`
+   parameter (e.g. `0755`). Important when uploading scripts that need
+   to be executed.
 
 ---
 
