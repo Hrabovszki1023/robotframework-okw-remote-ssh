@@ -19,9 +19,11 @@ jobs:
       - name: Create dummy secrets file
         run: |
           mkdir -p /root/.okw
-          echo 'secrets: {}' > /root/.okw/secrets.yaml
-          cat /root/.okw/secrets.yaml
-          echo "HOME=$HOME"
+          cat > /root/.okw/secrets.yaml << 'YAML'
+          secrets:
+            dummy/contract:
+              password: "dummy"
+          YAML
 
       - name: Run contract tests
         run: |
