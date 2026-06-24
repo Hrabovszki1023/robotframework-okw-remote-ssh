@@ -18,8 +18,10 @@ jobs:
 
       - name: Create dummy secrets file
         run: |
-          mkdir -p ~/.okw
-          echo 'secrets: {}' > ~/.okw/secrets.yaml
+          mkdir -p /root/.okw
+          echo 'secrets: {}' > /root/.okw/secrets.yaml
+          cat /root/.okw/secrets.yaml
+          echo "HOME=$HOME"
 
       - name: Run contract tests
         run: |
