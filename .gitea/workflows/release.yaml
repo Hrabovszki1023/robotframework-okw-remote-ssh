@@ -1,0 +1,31 @@
+name: Release to TestPyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install build twine
+
+      - name: Build package
+        run: |
+          . venv/bin/activate
+          python -m build
+
+      - name: Upload to TestPyPI
+        run: |
+          . venv/bin/activate
+          twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TESTPYPI_TOKEN }}
