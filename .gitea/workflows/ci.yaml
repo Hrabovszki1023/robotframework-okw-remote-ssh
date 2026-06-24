@@ -16,6 +16,11 @@ jobs:
           . venv/bin/activate
           pip install -e .
 
+      - name: Create dummy secrets file
+        run: |
+          mkdir -p ~/.okw
+          echo 'secrets: {}' > ~/.okw/secrets.yaml
+
       - name: Run contract tests
         run: |
           . venv/bin/activate

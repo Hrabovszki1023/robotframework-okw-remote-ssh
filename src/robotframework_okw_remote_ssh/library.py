@@ -142,7 +142,7 @@ class RemoteSshLibrary:
     | # --------------------------------------------------
     | # OKW Secrets – DO NOT commit to the repository!
     | # Path: ~/.okw/secrets.yaml  (Linux/macOS)
-    | #        %USERPROFILE%\.okw\secrets.yaml  (Windows)
+    | #        %USERPROFILE%\\.okw\\secrets.yaml  (Windows)
     | # --------------------------------------------------
     |
     | secrets:
