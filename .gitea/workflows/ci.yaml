@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install -e .
+
+      - name: Run contract tests
+        run: |
+          . venv/bin/activate
+          robot --outputdir results/contract tests/contract/contract.robot
