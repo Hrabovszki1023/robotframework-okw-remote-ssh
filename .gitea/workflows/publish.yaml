@@ -1,0 +1,41 @@
+name: "Stage 4: Publish to PyPI + GitHub Mirror"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install build twine
+
+      - name: Build package
+        run: |
+          . venv/bin/activate
+          python -m build
+
+      - name: Upload to PyPI
+        run: |
+          . venv/bin/activate
+          twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+
+  mirror-github:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to GitHub mirror
+        run: |
+          git remote add github https://x-access-token:${{ secrets.GH_MIRROR_TOKEN }}@github.com/Hrabovszki1023/robotframework-okw-remote-ssh.git || true
+          git push github main --tags --force
