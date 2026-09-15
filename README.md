@@ -1,10 +1,17 @@
 # robotframework-okw-remote-ssh
 
-Standalone Robot Framework library for deterministic, synchronous remote interaction via SSH.
+[![PyPI](https://img.shields.io/pypi/v/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
+[![Python](https://img.shields.io/pypi/pyversions/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
 
-Session-based command execution, structured verification (stdout, stderr, exit code, duration),
-and SFTP file transfer. Designed for CI pipelines, infrastructure validation, and cross-platform
-automation (Linux, macOS, Windows with OpenSSH).
+Standalone Robot Framework library for deterministic, synchronous remote interaction via SSH — command execution, structured verification, and SFTP file transfer.
+
+## Signal vs. NOISE
+
+| Signal (your test) | NOISE (hidden in YAML) |
+|---|---|
+| `Execute Remote myhost echo Hello` | Paramiko connection, auth, channel setup |
+| `Verify Remote Response Hello` | stdout capture, newline normalization |
+| `Put Remote File myhost /tmp/data.txt` | SFTP session, retry, permission handling |
 
 **[Keyword Documentation (Libdoc)](https://hrabovszki1023.github.io/robotframework-okw-remote-ssh/RemoteSshLibrary.html)**
 
@@ -203,6 +210,14 @@ All remove keywords are **idempotent**: if the target does not exist, they retur
 |-------|----------|
 | `$IGNORE` | Keyword becomes a no-op (PASS). Execution/verification/transfer is skipped. |
 | `$EMPTY` | For verify keywords: asserts that the checked field is empty. |
+
+## Runnable Examples
+
+[okw-examples/ssh/](https://github.com/Hrabovszki1023/okw-examples/tree/main/ssh/) — command execution, file transfer, error handling.
+
+## Handbuch
+
+[OKW4Robot Handbuch](https://hrabovszki1023.github.io/okw-examples/) — step-by-step guide (German).
 
 ## AI Test Generation
 
