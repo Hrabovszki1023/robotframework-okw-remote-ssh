@@ -2,8 +2,11 @@
 
 [![PyPI](https://img.shields.io/pypi/v/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
 [![Python](https://img.shields.io/pypi/pyversions/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 Standalone Robot Framework library for deterministic, synchronous remote interaction via SSH — command execution, structured verification, and SFTP file transfer.
+
+> **Deutsche Version:** [README_de.md](README_de.md)
 
 ## Signal vs. NOISE
 
@@ -18,6 +21,7 @@ Standalone Robot Framework library for deterministic, synchronous remote interac
 ## Features
 
 - **Session-based** SSH connections via Paramiko
+- **Fully synchronous**: `Execute Remote` returns only after all commands have completed — no asynchronous polling, no race conditions. This is the reason for choosing Paramiko over SSHLibrary.
 - **Strict separation** of execution and verification
 - **Command queuing**: `Set Remote` collects commands, `Execute Remote` sends them in one SSH call (preserves shell context)
 - **Three match modes**: EXACT, WCM (wildcard: `*`, `?`), REGX (regex)
@@ -26,15 +30,17 @@ Standalone Robot Framework library for deterministic, synchronous remote interac
 - **Value expansion**: `$MEM{KEY}` placeholders across all parameters
 - **No GUI coupling**, no dependency on OKW Core
 
-## Three-Phase Model
+## Five-Phase Model
 
 All keywords follow a fixed pattern:
 
 | Phase | Keywords | Purpose |
 |-------|----------|---------|
+| **Connect** | `Open Remote Session` | Open SSH session (YAML configuration) |
 | **Prepare** | `Set Remote` | Queue commands (no SSH call) |
 | **Execute** | `Execute Remote`, `Execute Remote And Continue` | Send commands and store result |
 | **Verify** | `Verify Remote Response`, `Verify Remote Stderr`, `Verify Remote Exit Code`, ... | Evaluate stored result |
+| **Disconnect** | `Close Remote Session`, `Close All Remote Sessions` | Close session and release resources |
 
 > **Note:** *Prepare* is optional — `Execute Remote` can also be called directly with a command.
 > When multiple `Set Remote` calls are queued, `Execute Remote` joins them with `&&` and sends them as **one** SSH call.
@@ -78,6 +84,23 @@ Tolerate Expected Errors
     Verify Remote Exit Code          myhost    1
     Verify Remote Stderr WCM         myhost    *No such file*
     Close Remote Session             myhost
+
+Upload File And Verify
+    Open Remote Session              myhost    my_server
+    Put Remote File                  myhost    /tmp/config.ini    local/config.ini
+    Verify Remote File Exists        myhost    /tmp/config.ini    YES
+    Execute Remote                   myhost    cat /tmp/config.ini
+    Verify Remote Response WCM       myhost    *database*
+    Close Remote Session             myhost
+
+Download Directory And Clean Up
+    Open Remote Session                  myhost    my_server
+    Get Remote Directory                 myhost    /var/log/app    local/logs
+    Verify Remote Directory Contains WCM myhost    /var/log/app    *.log
+    Verify Remote Directory Count        myhost    /var/log/app    3
+    Clear Remote Directory               myhost    /var/log/app
+    Verify Remote Directory Count        myhost    /var/log/app    0
+    Close Remote Session                 myhost
 ```
 
 ## Session Configuration
