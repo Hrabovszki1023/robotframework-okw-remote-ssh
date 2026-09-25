@@ -6,7 +6,7 @@
 
 Standalone Robot Framework library for deterministic, synchronous remote interaction via SSH — command execution, structured verification, and SFTP file transfer.
 
-> **Deutsche Version:** [README_de.md](README_de.md)
+> **Deutsche Version:** [README.de.md](README.de.md)
 
 ## Signal vs. NOISE
 
