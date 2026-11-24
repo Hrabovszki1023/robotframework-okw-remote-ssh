@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- License changed to Apache-2.0 (SPDX `Apache-2.0`). The previous OKW4Robot Community License and the commercial license option are withdrawn for new versions. `LICENSE`, `pyproject.toml` and README now state the same license (OKW-CONTRACT L1-L9).
+
 ## [0.4.1] - 2026-06-24
 
 ### CI/CD

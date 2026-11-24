@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
 [![Python](https://img.shields.io/pypi/pyversions/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
-[![License](https://img.shields.io/badge/License-OKW_Community-orange.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Standalone Robot Framework library for deterministic, synchronous remote interaction via SSH — command execution, structured verification, and SFTP file transfer.
 
@@ -253,4 +253,4 @@ The LLM produces a ready-to-run `.robot` file.
 
 ## License
 
-AGPL-3.0-or-later. See [LICENSE](LICENSE) for details.
+Apache-2.0. See [LICENSE](LICENSE) for details.

@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
 [![Python](https://img.shields.io/pypi/pyversions/robotframework-okw-remote-ssh)](https://pypi.org/project/robotframework-okw-remote-ssh/)
-[![License](https://img.shields.io/badge/License-OKW_Community-orange.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Eigenständige Robot Framework Bibliothek für deterministische, synchrone Remote-Interaktion via SSH — Kommandoausführung, strukturierte Verifikation und SFTP-Dateitransfer.
 
@@ -253,4 +253,4 @@ Die KI erzeugt eine lauffertige `.robot`-Datei.
 
 ## Lizenz
 
-AGPL-3.0-or-later. Siehe [LICENSE](LICENSE) für Details.
+Apache-2.0. Siehe [LICENSE](LICENSE) für Details.
