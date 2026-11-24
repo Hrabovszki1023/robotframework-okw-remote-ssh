@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=65", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "robotframework-okw-remote-ssh"
-version = "0.4.1"
+version = "0.4.2"
 description = "Robot Framework keyword library for deterministic remote command execution and SFTP file transfer via SSH."
 authors = [{ name = "Zoltán Hrabovszki" }]
 readme = "README.md"
-license = "AGPL-3.0-or-later"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 keywords = ["robotframework", "testing", "testautomation", "ssh", "sftp", "okw"]
 dependencies = [
